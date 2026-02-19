@@ -1,0 +1,15 @@
+# Environment file
+.env
+
+# Meilisearch data
+meili_data/
+
+# Local data storage (for people who use ./data)
+data/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# VS Code settings (optional)
+.vscode/

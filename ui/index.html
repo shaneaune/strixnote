@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Transcript Search</title>
+
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial;
+  max-width: 1100px;
+  margin: 40px auto;
+  background: #121212;
+  color: #e5e5e5;
+}
+
+.tabs { display:flex; gap:10px; margin-bottom:15px; }
+.tab {
+  padding:10px 14px;
+  background:#1a1a1a;
+  border:1px solid #2a2a2a;
+  border-radius:8px;
+  cursor:pointer;
+}
+.tab.active { background:#232323; }
+
+input {
+  width:100%;
+  padding:12px;
+  font-size:18px;
+  border-radius:8px;
+  border:1px solid #333;
+  background:#1e1e1e;
+  color:#fff;
+}
+
+.panel {
+  padding:18px;
+  border-radius:12px;
+  background:#1a1a1a;
+  border:1px solid #2a2a2a;
+  margin-top:15px;
+}
+
+.result {
+  margin-top:12px;
+  padding:14px;
+  border-radius:10px;
+  background:#1a1a1a;
+  border:1px solid #2a2a2a;
+  cursor:pointer;
+}
+.result:hover { background:#232323; }
+
+.file { font-weight:600; }
+.time { font-family:monospace; color:#7ec8ff; }
+.dt { font-family:monospace; color:#888; }
+.snippet { margin-top:8px; color:#ccc; }
+em { background:#ffcc00; color:#000; padding:2px 4px; border-radius:4px; }
+
+audio { width:100%; margin-top:10px; }
+
+.captionBox {
+  margin-top:10px;
+  background:#000;
+  padding:12px;
+  border-radius:8px;
+  min-height:40px;
+}
+
+.pager { margin-top:15px; display:flex; gap:10px; }
+button {
+  padding:8px 12px;
+  background:#2a2a2a;
+  border:1px solid #444;
+  color:#fff;
+  border-radius:6px;
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Transcript Search</h1>
+
+<div class="tabs">
+  <div class="tab active" id="tabSearch">Search</div>
+  <div class="tab" id="tabBrowse">Browse</div>
+</div>
+
+<div id="searchWrap">
+  <input id="searchBox" placeholder="Search..." />
+</div>
+
+<div class="panel">
+  <div id="nowPlayingTitle">Player</div>
+  <div id="nowPlayingMeta" style="color:#999;"></div>
+
+  <audio id="player" controls preload="metadata"></audio>
+  <div id="captionBox" class="captionBox"></div>
+</div>
+
+<div id="results"></div>
+
+<div id="browsePager" class="pager" style="display:none;">
+  <button id="prevPage">Prev</button>
+  <button id="nextPage">Next</button>
+</div>
+
+<script src="/config.js"></script>
+
+<script>
+const apiKey = window.APP_CONFIG.MEILI_SEARCH_KEY;
+const MEILI = window.APP_CONFIG.MEILI_URL;
+const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
+const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
+
+const player = document.getElementById("player");
+const captionBox = document.getElementById("captionBox");
+const resultsDiv = document.getElementById("results");
+const searchBox = document.getElementById("searchBox");
+
+let mode = "search";
+let browseOffset = 0;
+const browseLimit = 50;
+
+function baseName(f){ return f.replace(/\.[^/.]+$/, ""); }
+function msToHMS(ms){
+  const s = Math.floor(ms/1000);
+  const h = Math.floor(s/3600);
+  const m = Math.floor((s%3600)/60);
+  const sec = s%60;
+  return [h,m,sec].map(v=>String(v).padStart(2,"0")).join(":");
+}
+function epochToLocal(e){ return new Date(e*1000).toLocaleString(); }
+
+async function meili(index, body){
+  const r = await fetch(`${MEILI}/indexes/${index}/search`,{
+    method:"POST",
+    headers:{ "Content-Type":"application/json","Authorization":"Bearer "+apiKey },
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+
+function resetPlayer(){
+  try{ player.pause(); }catch(e){}
+  player.removeAttribute("src");
+  player.innerHTML="";
+  player.load();
+  captionBox.textContent="";
+}
+
+function wireCaptions(){
+  const tt = player.textTracks[0];
+  if(!tt) return;
+  tt.mode="hidden";
+  tt.addEventListener("cuechange", ()=>{
+    const cues = tt.activeCues;
+    if(!cues||!cues.length){ captionBox.textContent=""; return; }
+    captionBox.textContent = Array.from(cues).map(c=>c.text).join("\n");
+  });
+}
+
+function loadFile(filename,startMs=0){
+  resetPlayer();
+
+  const src = document.createElement("source");
+  src.src = "/audio/"+encodeURIComponent(filename);
+  player.appendChild(src);
+
+  const track = document.createElement("track");
+  track.kind="subtitles";
+  track.srclang="en";
+  track.src="/audio/"+encodeURIComponent(baseName(filename)+".vtt");
+  track.default=true;
+  player.appendChild(track);
+
+  player.load();
+
+  player.addEventListener("loadedmetadata", ()=>{
+    player.currentTime = startMs/1000;
+    player.play().catch(()=>{});
+  },{once:true});
+
+  wireCaptions();
+}
+
+searchBox.addEventListener("keypress", async e=>{
+  if(e.key!=="Enter") return;
+  const q = e.target.value.trim();
+  if(!q) return;
+
+  const data = await meili(INDEX_SEG,{
+    q,
+    limit:200,
+    sort:["created_at:desc"],
+    attributesToHighlight:["text"],
+    attributesToCrop:["text"],
+    cropLength:40
+  });
+
+  resultsDiv.innerHTML="";
+  (data.hits||[]).forEach(hit=>{
+    const div=document.createElement("div");
+    div.className="result";
+    div.innerHTML=`
+      <div class="file">${hit.filename}</div>
+      <div class="time">@ ${msToHMS(hit.start_ms)}</div>
+      <div class="dt">${epochToLocal(hit.created_at)}</div>
+      <div class="snippet">${hit._formatted?.text||hit.text}</div>
+    `;
+    div.onclick=()=>loadFile(hit.filename,hit.start_ms);
+    resultsDiv.appendChild(div);
+  });
+});
+
+document.getElementById("tabBrowse").onclick=async()=>{
+  mode="browse";
+  document.getElementById("tabBrowse").classList.add("active");
+  document.getElementById("tabSearch").classList.remove("active");
+  document.getElementById("searchWrap").style.display="none";
+  document.getElementById("browsePager").style.display="flex";
+
+  const data = await meili(INDEX_FILES,{
+    q:"",
+    limit:browseLimit,
+    offset:browseOffset,
+    sort:["created_at:desc"]
+  });
+
+  resultsDiv.innerHTML="";
+  (data.hits||[]).forEach(hit=>{
+    const div=document.createElement("div");
+    div.className="result";
+    div.innerHTML=`
+      <div class="file">${hit.filename}</div>
+      <div class="dt">${epochToLocal(hit.created_at)}</div>
+    `;
+    div.onclick=()=>loadFile(hit.filename,0);
+    resultsDiv.appendChild(div);
+  });
+};
+
+document.getElementById("tabSearch").onclick=()=>{
+  mode="search";
+  document.getElementById("tabSearch").classList.add("active");
+  document.getElementById("tabBrowse").classList.remove("active");
+  document.getElementById("searchWrap").style.display="block";
+  document.getElementById("browsePager").style.display="none";
+  resultsDiv.innerHTML="";
+};
+</script>
+
+</body>
+</html>

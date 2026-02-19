@@ -1,0 +1,42 @@
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: meilisearch
+    env_file:
+      - .env
+    environment:
+      - MEILI_ENV=production
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    ports:
+      - "7700:7700"
+    volumes:
+      - ./meili_data:/meili_data
+    restart: unless-stopped
+
+  transcribe_worker:
+    build: ./worker
+    container_name: transcribe_worker
+    env_file:
+      - .env
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - WHISPER_MODEL=${WHISPER_MODEL}
+      - WHISPER_DEVICE=${WHISPER_DEVICE}
+      - WHISPER_COMPUTE=${WHISPER_COMPUTE}
+    volumes:
+      - ${DATA_DIR}:/data
+    depends_on:
+      - meilisearch
+    restart: unless-stopped
+
+  search_ui:
+    image: nginx:alpine
+    container_name: search_ui
+    ports:
+      - "8080:80"
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+      - ./ui/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${DATA_DIR}/processed:/mnt/audio:ro
+    restart: unless-stopped
