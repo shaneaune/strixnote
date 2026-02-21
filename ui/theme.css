@@ -1,0 +1,224 @@
+:root {
+  --color-bg: #0F0B1A;
+  --color-surface: #17122A;
+  --color-surface-elevated: #1E1735;
+  --color-border: #241E3A;
+
+  --color-primary: #5B3FD6;
+  --color-accent: #4FD1C5;
+
+  --color-text: #E6E6F0;
+  --color-text-muted: #A9A3C5;
+  --color-text-disabled: rgba(230, 230, 240, 0.4);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: Manrope, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 28px auto;
+  padding: 0 16px;
+}
+
+/* Header / brand */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.header img {
+  width: 28px;
+  height: 28px;
+}
+
+.header .title {
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.header .subtitle {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* Panels */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-top: 14px;
+}
+
+/* Tabs: keep them as tabs, not giant bars */
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0 10px;
+  align-items: center;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.tab:hover {
+  border-color: rgba(91, 63, 214, 0.6);
+}
+
+.tab.active {
+  background: rgba(91, 63, 214, 0.25);
+  border-color: var(--color-primary);
+}
+
+/* Inputs (search box MUST be full width + dark) */
+input[type="text"],
+input[type="search"],
+#searchWrap input,
+#search {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid #2B2350;
+  background: #1C1532;
+  color: var(--color-text);
+}
+
+input::placeholder {
+  color: var(--color-text-muted);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(91, 63, 214, 0.25);
+}
+
+/* File input row (upload) */
+input[type="file"] {
+  width: auto;
+  max-width: 100%;
+  padding: 8px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+
+/* Buttons */
+button, .btn {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+button:hover, .btn:hover {
+  border-color: rgba(91, 63, 214, 0.6);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--color-primary);
+}
+
+button:disabled, .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Results */
+.result {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.result:hover {
+  border-color: rgba(91, 63, 214, 0.6);
+}
+
+.file { font-weight: 600; }
+
+.dt, .time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  color: var(--color-text-muted);
+}
+
+.snippet {
+  margin-top: 8px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* Highlight */
+em {
+  font-style: normal;
+  background: rgba(79, 209, 197, 0.22);
+  border: 1px solid rgba(79, 209, 197, 0.35);
+  color: var(--color-text);
+  padding: 1px 4px;
+  border-radius: 6px;
+}
+
+/* Player */
+audio { width: 100%; margin-top: 10px; }
+
+.captionBox {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  min-height: 44px;
+  background: #000;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+/* Pager */
+.pager, #browsePager {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
