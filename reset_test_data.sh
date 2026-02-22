@@ -22,6 +22,10 @@ sudo rm -rf "$MEILI_DATA_DIR"
 echo "[4/4] Starting containers..."
 docker compose up -d --build
 
+# Initialize Meilisearch index settings (sortable attributes, etc.)
+./init_meili.sh
+
+
 echo "Done."
 echo "Processed:  $PROCESSED_DIR"
 echo "Incoming:   $INCOMING_DIR"
