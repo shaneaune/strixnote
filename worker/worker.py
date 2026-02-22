@@ -6,7 +6,7 @@ import re
 from faster_whisper import WhisperModel
 
 IN_DIR = "/data/incoming"
-OUT_DIR = "/data/transcripts"
+OUT_DIR = "/data/processed"
 DONE_DIR = "/data/processed"
 
 MEILI_URL = "http://meilisearch:7700"
@@ -68,6 +68,15 @@ def write_vtt(segments, out_path):
         for seg in segments:
             f.write(f"{ts(seg.start)} --> {ts(seg.end)}\n{seg.text.strip()}\n\n")
 
+def format_txt_for_download(text: str) -> str:
+    # Insert a newline after sentence-ending punctuation.
+    # Avoid breaking decimal numbers like 3.14 by requiring a following space/end.
+    text = re.sub(r'(?<!\d)([.!?])(\s+)', r'\1\n', text)
+    # Also handle punctuation at end-of-string
+    text = re.sub(r'(?<!\d)([.!?])$', r'\1\n', text)
+    # Normalize: collapse excessive blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip() + "\n"
 
 def main():
     os.makedirs(IN_DIR, exist_ok=True)
@@ -94,7 +103,7 @@ def main():
             srt_path = os.path.join(OUT_DIR, base + ".srt")
             vtt_path = os.path.join(OUT_DIR, base + ".vtt")
 
-            if os.path.exists(txt_path) and os.path.exists(srt_path):
+            if os.path.exists(txt_path) and os.path.exists(srt_path) and os.path.exists(vtt_path):
                 # already processed
                 continue
 
@@ -111,9 +120,9 @@ def main():
 
                 full_text = " ".join(s.text.strip() for s in seg_list).strip()
 
-                # Write TXT
+                # Write TXT (human-readable lines)
                 with open(txt_path, "w", encoding="utf-8") as f:
-                    f.write(full_text + "\n")
+                    f.write(format_txt_for_download(full_text))
 
                 # Write SRT + VTT (VTT is for HTML5 track)
                 write_srt(seg_list, srt_path)
@@ -157,9 +166,6 @@ def main():
                         timeout=60,
                     ).raise_for_status()
 
-                # Copy subtitles to processed folder for playback
-                shutil.copy2(srt_path, os.path.join(DONE_DIR, base + ".srt"))
-                shutil.copy2(vtt_path, os.path.join(DONE_DIR, base + ".vtt"))
 
                 # Move original audio
                 shutil.move(path, os.path.join(DONE_DIR, name))

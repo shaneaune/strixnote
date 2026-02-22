@@ -12,7 +12,6 @@ app = Flask(__name__)
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 INCOMING_DIR = os.environ.get("INCOMING_DIR", f"{DATA_DIR}/incoming")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", f"{DATA_DIR}/processed")
-TRANSCRIPTS_DIR = os.environ.get("TRANSCRIPTS_DIR", f"{DATA_DIR}/transcripts")
 
 MEILI_URL = os.environ.get("MEILI_URL", "http://meilisearch:7700")
 MEILI_MASTER_KEY = os.environ.get("MEILI_MASTER_KEY", "")
@@ -92,10 +91,9 @@ def delete():
     paths = [
         Path(INCOMING_DIR) / filename,
         Path(PROCESSED_DIR) / filename,
+        Path(PROCESSED_DIR) / f"{base}.txt",
         Path(PROCESSED_DIR) / f"{base}.srt",
         Path(PROCESSED_DIR) / f"{base}.vtt",
-        Path(TRANSCRIPTS_DIR) / f"{base}.txt",
-        Path(TRANSCRIPTS_DIR) / f"{base}.srt",
     ]
 
     deleted_files = []

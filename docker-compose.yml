@@ -23,7 +23,6 @@ services:
       - DATA_DIR=/data
       - INCOMING_DIR=/data/incoming
       - PROCESSED_DIR=/data/processed
-      - TRANSCRIPTS_DIR=/data/transcripts
       - MEILI_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - INDEX_TRANSCRIPTS=transcripts

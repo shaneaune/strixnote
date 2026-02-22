@@ -20,11 +20,10 @@
         </div>
         <div>
           <div class="brand-title">OwlScribe</div>
-          <div class="brand-subtitle">Local audio transcription search</div>
+          <div class="brand-subtitle">Audio Transcription & Search</div>
         </div>
       </div>
     </div>
-
     <div class="panel" style="margin-top: 12px;">
       <div class="row" style="justify-content: space-between;">
         <div>
@@ -32,14 +31,20 @@
           <div class="small muted">Files are saved to incoming/ and processed automatically.</div>
         </div>
         <div class="row">
-          <input id="uploadFiles" class="input" type="file" multiple
-            accept=".wav,.mp3,.m4a,.aac,.flac,.ogg,.wma,.mp4,.webm" />
+          <input id="uploadFiles" type="file" multiple hidden accept=".wav,.mp3,.m4a,.aac,.flac,.ogg,.wma,.mp4,.webm" />
+
+          <button id="chooseBtn" class="btn btn-secondary" type="button">
+            Choose files
+          </button>
+
+          <span id="chosenLabel" class="small muted" style="align-self:center;">
+            No files chosen
+          </span>
           <button id="uploadBtn" class="btn btn-primary">Upload</button>
         </div>
       </div>
       <div id="uploadStatus" class="small muted" style="margin-top:10px;"></div>
     </div>
-
 
     <div class="tabs">
       <div class="tab active" id="tabSearch">Search</div>
@@ -256,6 +261,20 @@
         resultsDiv.innerHTML = "";
       };
 
+      const uploadFiles = document.getElementById("uploadFiles");
+      const chooseBtn = document.getElementById("chooseBtn");
+      const chosenLabel = document.getElementById("chosenLabel");
+
+      if (chooseBtn && uploadFiles) {
+        chooseBtn.onclick = () => uploadFiles.click();
+
+        uploadFiles.addEventListener("change", () => {
+          const n = uploadFiles.files ? uploadFiles.files.length : 0;
+          chosenLabel.textContent =
+            n === 0 ? "No files chosen" : `${n} file(s) selected`;
+        });
+      }
+
       async function doUpload() {
         const input = document.getElementById("uploadFiles");
         const status = document.getElementById("uploadStatus");
@@ -291,6 +310,7 @@
 
           // Clear selection after upload
           input.value = "";
+          document.getElementById("chosenLabel").textContent = "No files chosen";
         } catch (e) {
           status.textContent = `Upload failed: ${e}`;
         } finally {
