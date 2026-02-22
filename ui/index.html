@@ -95,16 +95,16 @@
         const sec = s % 60;
         return [h, m, sec].map(v => String(v).padStart(2, "0")).join(":");
       }
-        function epochToLocal(e) { return new Date(e * 1000).toLocaleString(); }
+      function epochToLocal(e) { return new Date(e * 1000).toLocaleString(); }
 
-        async function meili(index, body) {
-          const r = await fetch(`${MEILI}/search/${index}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-          });
-          return r.json();
-        }
+      async function meili(index, body) {
+        const r = await fetch(`${MEILI}/search/${index}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        return r.json();
+      }
 
       function resetPlayer() {
         try { player.pause(); } catch (e) { }
@@ -211,11 +211,23 @@
       <div class="file">${hit.filename}</div>
       <div class="dt">${epochToLocal(hit.created_at)}</div>
     </div>
-    <button class="btn btn-secondary btn-delete"
-            data-fn="${hit.filename}"
-            ${currentFile === hit.filename ? "disabled" : ""}>
-      Delete
-    </button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <a class="btn btn-secondary"
+           href="/audio/${baseName(hit.filename)}.txt"
+           download>
+          TXT
+        </a>
+        <a class="btn btn-secondary"
+           href="/audio/${hit.filename}"
+           download>
+          Audio
+        </a>
+        <button class="btn btn-secondary btn-delete"
+                data-fn="${hit.filename}"
+                ${currentFile === hit.filename ? "disabled" : ""}>
+          Delete
+        </button>
+      </div>
   </div>
 `;
 
