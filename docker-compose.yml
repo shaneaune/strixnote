@@ -8,9 +8,6 @@ services:
       - MEILI_ENV=production
       - MEILI_NO_ANALYTICS=true
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-      - MEILI_HTTP_CORS=*
-    ports:
-      - "7700:7700"
     volumes:
       - ./meili_data:/meili_data
     restart: unless-stopped
