@@ -1,6 +1,6 @@
 window.APP_CONFIG = {
-  MEILI_URL: "http://10.0.0.34:7700",
+  // Meili is accessed via the API proxy (nginx -> upload_api -> meili).
+  MEILI_URL: "/api/meili",
   MEILI_INDEX_SEGMENTS: "segments",
-  MEILI_INDEX_FILES: "transcripts",
-  MEILI_SEARCH_KEY: "1465de59c45f42cfa6910e141b98b0871d9a25cbe4c283c943b4722f853aa0cc"
+  MEILI_INDEX_FILES: "transcripts"
 };

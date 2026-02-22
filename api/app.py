@@ -77,6 +77,28 @@ def upload():
 
     return jsonify({"saved": saved, "rejected": rejected})
 
+@app.post("/meili/search/<index>")
+def meili_search(index: str):
+    # Proxy Meilisearch search so the browser never needs the Meili key.
+    # Expects the request body to be the same JSON you would POST to /indexes/<index>/search
+    body = request.get_json(silent=True) or {}
+
+    # Basic allowlist to avoid proxying arbitrary indexes
+    if index not in (INDEX_TRANSCRIPTS, INDEX_SEGMENTS):
+        return jsonify({"error": "invalid index"}), 400
+
+    try:
+        r = requests.post(
+            f"{MEILI_URL}/indexes/{index}/search",
+            headers={**meili_headers(), "Content-Type": "application/json"},
+            json=body,
+            timeout=15,
+        )
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({"error": f"meili proxy failed: {e}"}), 502
+
 @app.post("/delete")
 def delete():
     data = request.get_json(silent=True) or {}
