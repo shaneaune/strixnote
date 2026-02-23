@@ -20,9 +20,12 @@
         </div>
         <div>
           <div class="brand-title">StrixNote</div>
-          <div class="brand-subtitle">Audio Transcription & Search</div>
+          <div class="brand-subtitle">Wisdom that never leaves the nest.</div>
         </div>
       </div>
+      <button id="themeToggle" class="btn btn-secondary" type="button" style="margin-left:auto;">
+        Light mode
+      </button>
     </div>
     <div class="panel" style="margin-top: 12px;">
       <div class="row" style="justify-content: space-between;">
@@ -400,7 +403,43 @@
 
           xhr.send(form);
         }
+        // Theme toggle (persisted)
+        const themeToggle = document.getElementById("themeToggle");
+        const THEME_KEY = "strixnote_theme";
 
+        function applyTheme(theme) {
+          const root = document.documentElement;
+
+          if (theme === "light") {
+            root.setAttribute("data-theme", "light");
+            if (themeToggle) themeToggle.textContent = "Dark mode";
+          } else {
+            root.removeAttribute("data-theme");
+            if (themeToggle) themeToggle.textContent = "Light mode";
+          }
+        }
+
+        // Apply saved theme on load
+        try {
+          const saved = localStorage.getItem(THEME_KEY);
+          if (saved === "light" || saved === "dark") applyTheme(saved);
+          else applyTheme("dark"); // default
+        } catch (e) {
+          applyTheme("dark");
+        }
+
+        if (themeToggle) {
+          themeToggle.addEventListener("click", () => {
+            const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+            const next = current === "light" ? "dark" : "light";
+
+            applyTheme(next);
+
+            try {
+              localStorage.setItem(THEME_KEY, next);
+            } catch (e) { }
+          });
+        }
         document.getElementById("uploadBtn")?.addEventListener("click", doUpload);
 
       </script>
