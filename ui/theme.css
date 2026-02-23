@@ -222,3 +222,29 @@ audio { width: 100%; margin-top: 10px; }
   gap: 10px;
   align-items: center;
 }
+
+.progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.08);
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.35);
+  transition: width 150ms linear;
+}
+
+.progress.pulse .progress-bar {
+  width: 60% !important;
+  animation: progress-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  0%   { transform: translateX(-60%); }
+  100% { transform: translateX(140%); }
+}

@@ -6,6 +6,7 @@ import re
 from faster_whisper import WhisperModel
 
 IN_DIR = "/data/incoming"
+PROCESSING_DIR = "/data/incoming/.processing"
 OUT_DIR = "/data/processed"
 DONE_DIR = "/data/processed"
 
@@ -79,6 +80,7 @@ def format_txt_for_download(text: str) -> str:
     return text.strip() + "\n"
 
 def main():
+    os.makedirs(PROCESSING_DIR, exist_ok=True)
     os.makedirs(IN_DIR, exist_ok=True)
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(DONE_DIR, exist_ok=True)
@@ -114,8 +116,10 @@ def main():
                 continue
 
             try:
+                processing_path = os.path.join(PROCESSING_DIR, name)
+                shutil.move(path, processing_path)
                 print(f"Transcribing: {name}", flush=True)
-                segments, _info = model.transcribe(path, language="en", beam_size=5)
+                segments, _info = model.transcribe(processing_path, language="en", beam_size=5)
                 seg_list = list(segments)
 
                 full_text = " ".join(s.text.strip() for s in seg_list).strip()
@@ -168,14 +172,14 @@ def main():
 
 
                 # Move original audio
-                shutil.move(path, os.path.join(DONE_DIR, name))
+                shutil.move(processing_path, os.path.join(DONE_DIR, name))
 
                 print(f"Done: {name}", flush=True)
 
             except Exception as e:
                 print(f"ERROR processing {name}: {e}", flush=True)
                 try:
-                    shutil.move(path, os.path.join(DONE_DIR, name))
+                    shutil.move(processing_path, os.path.join(DONE_DIR, name))
                 except Exception:
                     pass
 

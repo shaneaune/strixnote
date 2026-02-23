@@ -99,6 +99,46 @@ def meili_search(index: str):
     except Exception as e:
         return jsonify({"error": f"meili proxy failed: {e}"}), 502
 
+@app.get("/status")
+def status():
+    filename = sanitize_filename(request.args.get("filename", ""))
+    if not filename:
+        return jsonify({"error": "missing filename"}), 400
+
+    base = Path(filename).stem
+
+    incoming_path = Path(INCOMING_DIR) / filename
+    processing_path = Path(INCOMING_DIR) / ".processing" / filename
+
+    processed_audio = Path(PROCESSED_DIR) / filename
+    processed_txt = Path(PROCESSED_DIR) / f"{base}.txt"
+    processed_srt = Path(PROCESSED_DIR) / f"{base}.srt"
+    processed_vtt = Path(PROCESSED_DIR) / f"{base}.vtt"
+
+    if processed_audio.exists() and processed_txt.exists():
+        state = "done"
+    elif processing_path.exists():
+        state = "processing"
+    elif incoming_path.exists():
+        state = "queued"
+    else:
+        state = "missing"
+
+    return jsonify({
+        "ok": True,
+        "state": state,
+        "filename": filename,
+        "base": base,
+        "exists": {
+            "incoming": incoming_path.exists(),
+            "processing": processing_path.exists(),
+            "processed_audio": processed_audio.exists(),
+            "processed_txt": processed_txt.exists(),
+            "processed_srt": processed_srt.exists(),
+            "processed_vtt": processed_vtt.exists(),
+        },
+    })
+
 @app.post("/delete")
 def delete():
     data = request.get_json(silent=True) or {}

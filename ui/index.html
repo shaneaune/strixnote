@@ -44,168 +44,173 @@
         </div>
       </div>
       <div id="uploadStatus" class="small muted" style="margin-top:10px;"></div>
-    </div>
+      <div id="uploadProgressWrap" style="margin-top:8px; display:none;">
+        <div class="progress">
+          <div id="uploadProgressBar" class="progress-bar" style="width:0%"></div>
+        </div>
+        <div id="uploadPhase" class="small muted" style="margin-top:6px;"></div>
+      </div>
 
-    <div class="tabs">
-      <div class="tab active" id="tabSearch">Search</div>
-      <div class="tab" id="tabBrowse">Browse</div>
-    </div>
+      <div class="tabs">
+        <div class="tab active" id="tabSearch">Search</div>
+        <div class="tab" id="tabBrowse">Browse</div>
+      </div>
 
-    <div id="searchWrap">
-      <input id="searchBox" placeholder="Search..." />
-    </div>
+      <div id="searchWrap">
+        <input id="searchBox" placeholder="Search..." />
+      </div>
 
-    <div class="panel">
-      <div id="nowPlayingTitle">Player</div>
-      <div id="nowPlayingMeta" style="color:#999;"></div>
+      <div class="panel">
+        <div id="nowPlayingTitle">Player</div>
+        <div id="nowPlayingMeta" style="color:#999;"></div>
 
-      <audio id="player" controls preload="metadata"></audio>
-      <div id="captionBox" class="captionBox"></div>
-    </div>
+        <audio id="player" controls preload="metadata"></audio>
+        <div id="captionBox" class="captionBox"></div>
+      </div>
 
-    <div id="results"></div>
+      <div id="results"></div>
 
-    <div id="browsePager" class="pager" style="display:none;">
-      <button id="prevPage">Prev</button>
-      <button id="nextPage">Next</button>
-    </div>
+      <div id="browsePager" class="pager" style="display:none;">
+        <button id="prevPage">Prev</button>
+        <button id="nextPage">Next</button>
+      </div>
 
-    <script src="/config.js"></script>
+      <script src="/config.js"></script>
 
-    <script>
-      const MEILI = window.APP_CONFIG.MEILI_URL;
-      const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
-      const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
+      <script>
+        const MEILI = window.APP_CONFIG.MEILI_URL;
+        const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
+        const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
 
-      const player = document.getElementById("player");
-      const captionBox = document.getElementById("captionBox");
-      const resultsDiv = document.getElementById("results");
-      const searchBox = document.getElementById("searchBox");
+        const player = document.getElementById("player");
+        const captionBox = document.getElementById("captionBox");
+        const resultsDiv = document.getElementById("results");
+        const searchBox = document.getElementById("searchBox");
 
-      let mode = "search";
-      let browseOffset = 0;
-      let currentFile = null;
-      const browseLimit = 50;
+        let mode = "search";
+        let browseOffset = 0;
+        let currentFile = null;
+        const browseLimit = 50;
 
-      function baseName(f) { return f.replace(/\.[^/.]+$/, ""); }
-      function msToHMS(ms) {
-        const s = Math.floor(ms / 1000);
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const sec = s % 60;
-        return [h, m, sec].map(v => String(v).padStart(2, "0")).join(":");
-      }
-      function epochToLocal(e) { return new Date(e * 1000).toLocaleString(); }
-
-      async function meili(index, body) {
-        const r = await fetch(`${MEILI}/search/${index}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-        return r.json();
-      }
-
-      function resetPlayer() {
-        try { player.pause(); } catch (e) { }
-        player.removeAttribute("src");
-        player.innerHTML = "";
-        player.load();
-        captionBox.textContent = "";
-      }
-
-      function wireCaptions() {
-        const tt = player.textTracks[0];
-        if (!tt) return;
-        tt.mode = "hidden";
-        tt.addEventListener("cuechange", () => {
-          const cues = tt.activeCues;
-          if (!cues || !cues.length) { captionBox.textContent = ""; return; }
-          captionBox.textContent = Array.from(cues).map(c => c.text).join("\n");
-        });
-      }
-
-      function loadFile(filename, startMs = 0) {
-        currentFile = filename;
-        resetPlayer();
-        refreshBrowseIfVisible();
-
-        const src = document.createElement("source");
-        src.src = "/audio/" + encodeURIComponent(filename);
-        player.appendChild(src);
-
-        const track = document.createElement("track");
-        track.kind = "subtitles";
-        track.srclang = "en";
-        track.src = "/audio/" + encodeURIComponent(baseName(filename) + ".vtt");
-        track.default = true;
-        player.appendChild(track);
-
-        player.load();
-
-        player.addEventListener("loadedmetadata", () => {
-          player.currentTime = startMs / 1000;
-          player.play().catch(() => { });
-        }, { once: true });
-
-        wireCaptions();
-      }
-
-      function refreshBrowseIfVisible() {
-        if (mode === "browse") {
-          document.getElementById("tabBrowse").click();
+        function baseName(f) { return f.replace(/\.[^/.]+$/, ""); }
+        function msToHMS(ms) {
+          const s = Math.floor(ms / 1000);
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          return [h, m, sec].map(v => String(v).padStart(2, "0")).join(":");
         }
-      }
+        function epochToLocal(e) { return new Date(e * 1000).toLocaleString(); }
+
+        async function meili(index, body) {
+          const r = await fetch(`${MEILI}/search/${index}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          return r.json();
+        }
+
+        function resetPlayer() {
+          try { player.pause(); } catch (e) { }
+          player.removeAttribute("src");
+          player.innerHTML = "";
+          player.load();
+          captionBox.textContent = "";
+        }
+
+        function wireCaptions() {
+          const tt = player.textTracks[0];
+          if (!tt) return;
+          tt.mode = "hidden";
+          tt.addEventListener("cuechange", () => {
+            const cues = tt.activeCues;
+            if (!cues || !cues.length) { captionBox.textContent = ""; return; }
+            captionBox.textContent = Array.from(cues).map(c => c.text).join("\n");
+          });
+        }
+
+        function loadFile(filename, startMs = 0) {
+          currentFile = filename;
+          resetPlayer();
+          refreshBrowseIfVisible();
+
+          const src = document.createElement("source");
+          src.src = "/audio/" + encodeURIComponent(filename);
+          player.appendChild(src);
+
+          const track = document.createElement("track");
+          track.kind = "subtitles";
+          track.srclang = "en";
+          track.src = "/audio/" + encodeURIComponent(baseName(filename) + ".vtt");
+          track.default = true;
+          player.appendChild(track);
+
+          player.load();
+
+          player.addEventListener("loadedmetadata", () => {
+            player.currentTime = startMs / 1000;
+            player.play().catch(() => { });
+          }, { once: true });
+
+          wireCaptions();
+        }
+
+        function refreshBrowseIfVisible() {
+          if (mode === "browse") {
+            document.getElementById("tabBrowse").click();
+          }
+        }
 
 
-      searchBox.addEventListener("keypress", async e => {
-        if (e.key !== "Enter") return;
-        const q = e.target.value.trim();
-        if (!q) return;
+        searchBox.addEventListener("keypress", async e => {
+          if (e.key !== "Enter") return;
+          const q = e.target.value.trim();
+          if (!q) return;
 
-        const data = await meili(INDEX_SEG, {
-          q,
-          limit: 200,
-          sort: ["created_at:desc"],
-          attributesToHighlight: ["text"],
-          attributesToCrop: ["text"],
-          cropLength: 40
-        });
+          const data = await meili(INDEX_SEG, {
+            q,
+            limit: 200,
+            sort: ["created_at:desc"],
+            attributesToHighlight: ["text"],
+            attributesToCrop: ["text"],
+            cropLength: 40
+          });
 
-        resultsDiv.innerHTML = "";
-        (data.hits || []).forEach(hit => {
-          const div = document.createElement("div");
-          div.className = "result";
-          div.innerHTML = `
+          resultsDiv.innerHTML = "";
+          (data.hits || []).forEach(hit => {
+            const div = document.createElement("div");
+            div.className = "result";
+            div.innerHTML = `
       <div class="file">${hit.filename}</div>
       <div class="time">@ ${msToHMS(hit.start_ms)}</div>
       <div class="dt">${epochToLocal(hit.created_at)}</div>
       <div class="snippet">${hit._formatted?.text || hit.text}</div>
     `;
-          div.onclick = () => loadFile(hit.filename, hit.start_ms);
-          resultsDiv.appendChild(div);
-        });
-      });
-
-      document.getElementById("tabBrowse").onclick = async () => {
-        mode = "browse";
-        document.getElementById("tabBrowse").classList.add("active");
-        document.getElementById("tabSearch").classList.remove("active");
-        document.getElementById("searchWrap").style.display = "none";
-        document.getElementById("browsePager").style.display = "flex";
-
-        const data = await meili(INDEX_FILES, {
-          q: "",
-          limit: browseLimit,
-          offset: browseOffset,
-          sort: ["created_at:desc"]
+            div.onclick = () => loadFile(hit.filename, hit.start_ms);
+            resultsDiv.appendChild(div);
+          });
         });
 
-        resultsDiv.innerHTML = "";
-        (data.hits || []).forEach(hit => {
-          const div = document.createElement("div");
-          div.className = "result";
-          div.innerHTML = `
+        document.getElementById("tabBrowse").onclick = async () => {
+          mode = "browse";
+          document.getElementById("tabBrowse").classList.add("active");
+          document.getElementById("tabSearch").classList.remove("active");
+          document.getElementById("searchWrap").style.display = "none";
+          document.getElementById("browsePager").style.display = "flex";
+
+          const data = await meili(INDEX_FILES, {
+            q: "",
+            limit: browseLimit,
+            offset: browseOffset,
+            sort: ["created_at:desc"]
+          });
+
+          resultsDiv.innerHTML = "";
+          (data.hits || []).forEach(hit => {
+            const div = document.createElement("div");
+            div.className = "result";
+            div.innerHTML = `
   <div style="display:flex; justify-content:space-between; align-items:center;">
     <div>
       <div class="file">${hit.filename}</div>
@@ -232,108 +237,171 @@
 `;
 
 
-          // click anywhere except delete → play
-          div.onclick = (e) => {
-            if (!e.target.classList.contains("btn-delete")) {
-              loadFile(hit.filename, 0);
-            }
-          };
+            // click anywhere except delete → play
+            div.onclick = (e) => {
+              if (!e.target.classList.contains("btn-delete")) {
+                loadFile(hit.filename, 0);
+              }
+            };
 
 
-          resultsDiv.appendChild(div);
-          div.querySelector(".btn-delete").onclick = async (e) => {
-            e.stopPropagation();
-            if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
+            resultsDiv.appendChild(div);
+            div.querySelector(".btn-delete").onclick = async (e) => {
+              e.stopPropagation();
+              if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
 
-            const resp = await fetch("/api/delete", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ filename: hit.filename })
-            });
+              const resp = await fetch("/api/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: hit.filename })
+              });
 
-            const data = await resp.json();
-            if (!resp.ok) {
-              alert("Delete failed: " + (data.error || resp.statusText));
-              return;
-            }
+              const data = await resp.json();
+              if (!resp.ok) {
+                alert("Delete failed: " + (data.error || resp.statusText));
+                return;
+              }
 
-            div.remove();
-          };
+              div.remove();
+            };
 
-        });
-      };
+          });
+        };
 
-      document.getElementById("tabSearch").onclick = () => {
-        mode = "search";
-        document.getElementById("tabSearch").classList.add("active");
-        document.getElementById("tabBrowse").classList.remove("active");
-        document.getElementById("searchWrap").style.display = "block";
-        document.getElementById("browsePager").style.display = "none";
-        resultsDiv.innerHTML = "";
-      };
+        document.getElementById("tabSearch").onclick = () => {
+          mode = "search";
+          document.getElementById("tabSearch").classList.add("active");
+          document.getElementById("tabBrowse").classList.remove("active");
+          document.getElementById("searchWrap").style.display = "block";
+          document.getElementById("browsePager").style.display = "none";
+          resultsDiv.innerHTML = "";
+        };
 
-      const uploadFiles = document.getElementById("uploadFiles");
-      const chooseBtn = document.getElementById("chooseBtn");
-      const chosenLabel = document.getElementById("chosenLabel");
+        const uploadFiles = document.getElementById("uploadFiles");
+        const chooseBtn = document.getElementById("chooseBtn");
+        const chosenLabel = document.getElementById("chosenLabel");
 
-      if (chooseBtn && uploadFiles) {
-        chooseBtn.onclick = () => uploadFiles.click();
+        if (chooseBtn && uploadFiles) {
+          chooseBtn.onclick = () => uploadFiles.click();
 
-        uploadFiles.addEventListener("change", () => {
-          const n = uploadFiles.files ? uploadFiles.files.length : 0;
-          chosenLabel.textContent =
-            n === 0 ? "No files chosen" : `${n} file(s) selected`;
-        });
-      }
-
-      async function doUpload() {
-        const input = document.getElementById("uploadFiles");
-        const status = document.getElementById("uploadStatus");
-        const btn = document.getElementById("uploadBtn");
-
-        if (!input.files || input.files.length === 0) {
-          status.textContent = "Select one or more audio files first.";
-          return;
+          uploadFiles.addEventListener("change", () => {
+            const n = uploadFiles.files ? uploadFiles.files.length : 0;
+            chosenLabel.textContent =
+              n === 0 ? "No files chosen" : `${n} file(s) selected`;
+          });
         }
+        async function pollProcessing(filename, progressWrap, progressContainer, progressPhase) {
+          const maxWaitMs = 30 * 60 * 1000; // 30 minutes safety
+          const start = Date.now();
 
-        const form = new FormData();
-        for (const f of input.files) form.append("files", f);
+          while (Date.now() - start < maxWaitMs) {
+            try {
+              const r = await fetch(`/api/status?filename=${encodeURIComponent(filename)}`);
+              const data = await r.json();
 
-        btn.disabled = true;
-        status.textContent = `Uploading ${input.files.length} file(s)...`;
+              if (data.state === "done") {
+                progressContainer.classList.remove("pulse");
+                progressPhase.textContent = "Processing complete.";
+                setTimeout(() => {
+                  progressWrap.style.display = "none";
+                }, 5000);
+                return;
+              }
 
-        try {
-          const resp = await fetch("/api/upload", { method: "POST", body: form });
-          const data = await resp.json();
+              if (data.state === "missing") {
+                progressContainer.classList.remove("pulse");
+                progressPhase.textContent = "File not found.";
+                return;
+              }
 
-          if (!resp.ok) {
-            status.textContent = `Upload failed: ${data.error || resp.statusText}`;
+            } catch (e) {
+              console.log("Status poll error:", e);
+            }
+
+            await new Promise(r => setTimeout(r, 2000));
+          }
+
+          progressContainer.classList.remove("pulse");
+          progressPhase.textContent = "Processing timeout.";
+        }
+        async function doUpload() {
+          const input = document.getElementById("uploadFiles");
+          const status = document.getElementById("uploadStatus");
+          const btn = document.getElementById("uploadBtn");
+
+          const progressWrap = document.getElementById("uploadProgressWrap");
+          const progressBar = document.getElementById("uploadProgressBar");
+          const progressPhase = document.getElementById("uploadPhase");
+          const progressContainer = progressBar.parentElement;
+
+          if (!input.files || input.files.length === 0) {
+            status.textContent = "Select one or more audio files first.";
             return;
           }
 
-          const saved = (data.saved || []).length;
-          const rej = (data.rejected || []).length;
-          status.textContent = `Uploaded: ${saved}. Rejected: ${rej}.`;
+          const form = new FormData();
+          for (const f of input.files) form.append("files", f);
 
-          if (rej > 0) {
-            console.log("Rejected:", data.rejected);
-          }
+          btn.disabled = true;
+          status.textContent = "";
+          progressWrap.style.display = "block";
+          progressBar.style.width = "0%";
+          progressPhase.textContent = "Uploading...";
 
-          // Clear selection after upload
-          input.value = "";
-          document.getElementById("chosenLabel").textContent = "No files chosen";
-        } catch (e) {
-          status.textContent = `Upload failed: ${e}`;
-        } finally {
-          btn.disabled = false;
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/upload");
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              progressBar.style.width = percent + "%";
+            }
+          };
+
+          xhr.onload = async () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              progressBar.style.width = "100%";
+              progressPhase.textContent = "Processing (large files may take a while)...";
+
+              // Switch to pulse animation
+              progressContainer.classList.add("pulse");
+
+              let uploadedName = null;
+              try {
+                const data = JSON.parse(xhr.responseText || "{}");
+                uploadedName = (data.saved && data.saved[0] && data.saved[0].filename) ? data.saved[0].filename : null;
+              } catch (e) { }
+
+              const toPoll = uploadedName || (input.files[0] ? input.files[0].name : "");
+              if (toPoll) {
+                await pollProcessing(toPoll, progressWrap, progressContainer, progressPhase);
+              } else {
+                progressContainer.classList.remove("pulse");
+                progressPhase.textContent = "Uploaded, but could not determine filename to track.";
+              }
+
+              input.value = "";
+              document.getElementById("chosenLabel").textContent = "No files chosen";
+            } else {
+              progressPhase.textContent = "Upload failed.";
+            }
+
+            btn.disabled = false;
+          };
+
+          xhr.onerror = () => {
+            progressPhase.textContent = "Upload failed.";
+            btn.disabled = false;
+          };
+
+          xhr.send(form);
         }
-      }
 
-      document.getElementById("uploadBtn")?.addEventListener("click", doUpload);
+        document.getElementById("uploadBtn")?.addEventListener("click", doUpload);
 
-    </script>
+      </script>
 
-  </div>
+    </div>
 </body>
 
 </html>
