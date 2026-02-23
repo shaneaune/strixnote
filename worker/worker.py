@@ -85,7 +85,12 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(DONE_DIR, exist_ok=True)
 
-    model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE)
+    model = WhisperModel(
+        MODEL_NAME,
+        device=DEVICE,
+        compute_type=COMPUTE_TYPE,
+        download_root=os.environ.get("WHISPER_MODEL_DIR", "/models"),
+    )
     print(f"Watching {IN_DIR} model={MODEL_NAME} device={DEVICE} compute={COMPUTE_TYPE}", flush=True)
 
     while True:

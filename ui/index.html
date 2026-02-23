@@ -3,10 +3,10 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>OwlScribe</title>
+  <title>StrixNote</title>
 
   <link rel="stylesheet" href="theme.css">
-  <link rel="icon" type="image/png" href="/assets/owlscribe-icon.png">
+  <link rel="icon" type="image/png" href="/assets/strixnote-icon.png">
 
 </head>
 
@@ -16,10 +16,10 @@
     <div class="header">
       <div class="brand">
         <div class="brand-badge">
-          <img src="/assets/owlscribe-icon.png" alt="OwlScribe">
+          <img src="/assets/strixnote-icon.png" alt="StrixNote">
         </div>
         <div>
-          <div class="brand-title">OwlScribe</div>
+          <div class="brand-title">StrixNote</div>
           <div class="brand-subtitle">Audio Transcription & Search</div>
         </div>
       </div>
@@ -302,6 +302,10 @@
               if (data.state === "done") {
                 progressContainer.classList.remove("pulse");
                 progressPhase.textContent = "Processing complete.";
+
+                // If Browse tab is active, refresh the list automatically
+                refreshBrowseIfVisible();
+
                 setTimeout(() => {
                   progressWrap.style.display = "none";
                 }, 5000);

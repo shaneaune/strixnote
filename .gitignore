@@ -13,3 +13,6 @@ Thumbs.db
 
 # VS Code settings (optional)
 .vscode/
+
+# Whisper Models Directory
+whisper_models/ 

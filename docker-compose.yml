@@ -41,8 +41,11 @@ services:
       - WHISPER_MODEL=${WHISPER_MODEL}
       - WHISPER_DEVICE=${WHISPER_DEVICE}
       - WHISPER_COMPUTE=${WHISPER_COMPUTE}
+      - WHISPER_MODEL_DIR=/models
+      - HF_HUB_OFFLINE=1
     volumes:
       - ${DATA_DIR}:/data
+      - ./whisper_models:/models
     depends_on:
       - meilisearch
     restart: unless-stopped
