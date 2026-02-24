@@ -327,4 +327,7 @@ def delete():
     if not ok and error_message:
         response["error"] = f"Meilisearch task failed: {error_message}"
 
-    return jsonify(response)
+    if not ok:
+        return jsonify(response), 502
+
+    return jsonify(response), 200
