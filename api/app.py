@@ -303,18 +303,28 @@ def delete():
     # If Meili explicitly failed, surface it as a non-ok response.
     # Disk deletion may still have succeeded; this only reflects index cleanup status.
     meili_failed = False
+    error_message = None
+
     for k in ("segments_task", "segments_fallback_task"):
         st = tasks.get(k) or {}
         if isinstance(st, dict) and (st.get("status") or "").lower() == "failed":
             meili_failed = True
+            err = st.get("error") or {}
+            if isinstance(err, dict):
+                error_message = err.get("message") or str(err)
+            else:
+                error_message = str(err)
 
     ok = not meili_failed
 
-    return jsonify(
-        {
-            "ok": ok,
-            "filename": filename,
-            "deleted_files": deleted_files,
-            "meili": tasks,
-        }
-    )
+    response = {
+        "ok": ok,
+        "filename": filename,
+        "deleted_files": deleted_files,
+        "meili": tasks,
+    }
+
+    if not ok and error_message:
+        response["error"] = f"Meilisearch task failed: {error_message}"
+
+    return jsonify(response)
