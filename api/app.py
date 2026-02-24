@@ -171,7 +171,7 @@ def delete():
     tasks = {}
 
     if MEILI_MASTER_KEY:
-        # segments: delete by filter on filename
+        # segments: try delete-by-filter; if it fails, fall back to search+delete-batch
         try:
             r = requests.post(
                 f"{MEILI_URL}/indexes/{INDEX_SEGMENTS}/documents/delete",
@@ -184,6 +184,54 @@ def delete():
         except Exception as e:
             tasks["segments_error"] = str(e)
 
+            # Fallback: search for matching docs, then delete by ids
+            try:
+                deleted = 0
+                offset = 0
+                limit = 1000
+
+                while True:
+                    sr = requests.post(
+                        f"{MEILI_URL}/indexes/{INDEX_SEGMENTS}/search",
+                        headers={**meili_headers(), "Content-Type": "application/json"},
+                        json={
+                            "q": filename,
+                            "limit": limit,
+                            "offset": offset,
+                            "attributesToRetrieve": ["id", "filename"],
+                        },
+                        timeout=10,
+                    )
+                    sr.raise_for_status()
+                    sj = sr.json()
+                    hits = sj.get("hits", []) or []
+
+                    ids = [
+                        h["id"]
+                        for h in hits
+                        if h.get("filename") == filename and h.get("id")
+                    ]
+
+                    if not ids:
+                        break
+
+                    dr = requests.post(
+                        f"{MEILI_URL}/indexes/{INDEX_SEGMENTS}/documents/delete-batch",
+                        headers={**meili_headers(), "Content-Type": "application/json"},
+                        json=ids,
+                        timeout=10,
+                    )
+                    dr.raise_for_status()
+
+                    deleted += len(ids)
+                    offset += limit
+
+                    if len(hits) < limit:
+                        break
+
+                tasks["segments_fallback"] = {"deleted": deleted}
+            except Exception as e2:
+                tasks["segments_fallback_error"] = str(e2)
         # transcripts: delete by id = safe(base)
         try:
             safe_id = safe_id_from_filename(filename)

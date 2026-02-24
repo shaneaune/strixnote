@@ -15,4 +15,4 @@ Thumbs.db
 .vscode/
 
 # Whisper Models Directory
-whisper_models/ 
+whisper_models/ __pycache__/

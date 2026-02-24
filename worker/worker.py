@@ -3,6 +3,8 @@ import time
 import shutil
 import requests
 import re
+import json
+import subprocess
 from faster_whisper import WhisperModel
 
 IN_DIR = "/data/incoming"
@@ -37,6 +39,27 @@ def is_stable(path: str, seconds: int = 5) -> bool:
     time.sleep(seconds)
     s2 = os.path.getsize(path)
     return s1 == s2
+
+
+def probe_duration_seconds(path: str) -> float:
+    try:
+        import subprocess
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return 0.0
 
 
 def write_srt(segments, out_path):
@@ -139,12 +162,17 @@ def main():
 
                 now = int(time.time())
 
+                audio_bytes = os.path.getsize(processing_path)
+                duration_s = probe_duration_seconds(processing_path)
+
                 # ---- FILE-LEVEL DOCUMENT (existing behavior preserved) ----
                 file_doc = {
                     "id": safe_base,
                     "filename": name,
                     "text": full_text,
                     "created_at": now,
+                    "audio_bytes": audio_bytes,
+                    "duration_s": duration_s,
                 }
 
                 requests.post(

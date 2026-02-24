@@ -113,7 +113,34 @@
           });
           return r.json();
         }
+        function formatBytes(bytes) {
+          if (bytes == null || isNaN(bytes)) return "";
+          const units = ["B", "KB", "MB", "GB"];
+          let v = Number(bytes);
+          let i = 0;
+          while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+          const num = i === 0 ? String(Math.round(v)) : v.toFixed(v >= 10 ? 1 : 2);
+          return `${num} ${units[i]}`;
+        }
 
+        function formatDuration(seconds) {
+          if (seconds == null || isNaN(seconds)) return "";
+          const s = Math.round(Number(seconds));
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+          return `${m}:${String(sec).padStart(2, "0")}`;
+        }
+
+        function formatMeta(hit) {
+          const dur = formatDuration(hit.duration_s);
+          const size = formatBytes(hit.audio_bytes);
+          const parts = [];
+          if (dur) parts.push(dur);
+          if (size) parts.push(size);
+          return parts.length ? ` \u2022 ${parts.join(" \u2022 ")}` : "";
+        }
         function resetPlayer() {
           try { player.pause(); } catch (e) { }
           player.removeAttribute("src");
@@ -217,7 +244,7 @@
   <div style="display:flex; justify-content:space-between; align-items:center;">
     <div>
       <div class="file">${hit.filename}</div>
-      <div class="dt">${epochToLocal(hit.created_at)}</div>
+      <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
     </div>
       <div style="display:flex; gap:8px; align-items:center;">
         <a class="btn btn-secondary"
