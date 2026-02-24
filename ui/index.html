@@ -66,24 +66,25 @@
       <div class="panel">
         <div id="nowPlayingTitle">Player</div>
         <div id="nowPlayingMeta" style="color:#999;"></div>
-
+        
         <audio id="player" controls preload="metadata"></audio>
         <div id="captionBox" class="captionBox"></div>
-      </div>
-
-      <div id="results"></div>
-
-      <div id="browsePager" class="pager" style="display:none;">
-        <button id="prevPage">Prev</button>
-        <button id="nextPage">Next</button>
-      </div>
-
-      <script src="/config.js"></script>
-
-      <script>
-        const MEILI = window.APP_CONFIG.MEILI_URL;
-        const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
-        const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
+        </div>
+        
+        <div id="results"></div>
+        
+        <div id="browsePager" class="pager" style="display:none;">
+          <button id="prevPage">Prev</button>
+          <span id="pagerInfo" style="padding:0 10px;"></span>
+          <button id="nextPage">Next</button>
+        </div>
+        
+        <script src="/config.js"></script>
+        
+        <script>
+          const MEILI = window.APP_CONFIG.MEILI_URL;
+          const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
+          const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
 
         const player = document.getElementById("player");
         const captionBox = document.getElementById("captionBox");
@@ -92,8 +93,10 @@
 
         let mode = "search";
         let browseOffset = 0;
+        let searchOffset = 0;
+        let searchQuery = "";
         let currentFile = null;
-        const browseLimit = 50;
+        const browseLimit = 20;
 
         function baseName(f) { return f.replace(/\.[^/.]+$/, ""); }
         function msToHMS(ms) {
@@ -192,15 +195,13 @@
           }
         }
 
-
-        searchBox.addEventListener("keypress", async e => {
-          if (e.key !== "Enter") return;
-          const q = e.target.value.trim();
-          if (!q) return;
+        async function performSearch() {
+          if (!searchQuery) return;
 
           const data = await meili(INDEX_SEG, {
-            q,
-            limit: 200,
+            q: searchQuery,
+            limit: browseLimit,
+            offset: searchOffset,
             sort: ["created_at:desc"],
             attributesToHighlight: ["text"],
             attributesToCrop: ["text"],
@@ -220,6 +221,33 @@
             div.onclick = () => loadFile(hit.filename, hit.start_ms);
             resultsDiv.appendChild(div);
           });
+
+          // Pager button states
+          const total = data.estimatedTotalHits ?? 0;
+          const start = total === 0 ? 0 : searchOffset + 1;
+          const end = Math.min(searchOffset + (data.hits?.length || 0), total);
+          document.getElementById("pagerInfo").textContent =
+            total === 0 ? "No results" : `${start}-${end} of ${total}`;
+          document.getElementById("prevPage").disabled = (searchOffset === 0);
+          document.getElementById("nextPage").disabled = !data.hits || data.hits.length < browseLimit;
+        }
+
+        searchBox.addEventListener("keypress", async e => {
+          if (e.key !== "Enter") return;
+
+          const q = e.target.value.trim();
+          if (!q) return;
+
+          searchQuery = q;
+          searchOffset = 0;
+          mode = "search";
+
+          document.getElementById("tabSearch").classList.add("active");
+          document.getElementById("tabBrowse").classList.remove("active");
+          document.getElementById("searchWrap").style.display = "block";
+          document.getElementById("browsePager").style.display = "flex";
+
+          await performSearch();
         });
 
         document.getElementById("tabBrowse").onclick = async () => {
@@ -235,6 +263,12 @@
             offset: browseOffset,
             sort: ["created_at:desc"]
           });
+
+          const total = data.estimatedTotalHits ?? 0;
+          const start = total === 0 ? 0 : browseOffset + 1;
+          const end = Math.min(browseOffset + (data.hits?.length || 0), total);
+          document.getElementById("pagerInfo").textContent =
+            total === 0 ? "No files" : `${start}-${end} of ${total}`;
 
           resultsDiv.innerHTML = "";
           (data.hits || []).forEach(hit => {
@@ -468,6 +502,26 @@
           });
         }
         document.getElementById("uploadBtn")?.addEventListener("click", doUpload);
+
+        document.getElementById("prevPage").onclick = async () => {
+          if (mode === "browse") {
+            browseOffset = Math.max(0, browseOffset - browseLimit);
+            await document.getElementById("tabBrowse").onclick();
+          } else {
+            searchOffset = Math.max(0, searchOffset - browseLimit);
+            await performSearch();
+          }
+        };
+
+        document.getElementById("nextPage").onclick = async () => {
+          if (mode === "browse") {
+            browseOffset += browseLimit;
+            await document.getElementById("tabBrowse").onclick();
+          } else {
+            searchOffset += browseLimit;
+            await performSearch();
+          }
+        };
 
       </script>
 
