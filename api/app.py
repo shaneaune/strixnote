@@ -20,8 +20,44 @@ INDEX_SEGMENTS = os.environ.get("INDEX_SEGMENTS", "segments")
 
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".webm"}
 
+
 def meili_headers():
     return {"Authorization": f"Bearer {MEILI_MASTER_KEY}"} if MEILI_MASTER_KEY else {}
+
+
+def wait_meili_task(task_uid, timeout_s=3.0, interval_s=0.1):
+    """
+    Best-effort: poll Meilisearch task status for a short time so the API can
+    report failures (e.g., invalid filter) instead of silently enqueuing.
+    """
+    if task_uid is None:
+        return None
+
+    deadline = time.time() + float(timeout_s)
+    last = None
+
+    while time.time() < deadline:
+        try:
+            r = requests.get(
+                f"{MEILI_URL}/tasks/{task_uid}",
+                headers=meili_headers(),
+                timeout=5,
+            )
+            r.raise_for_status()
+            last = r.json()
+
+            status = (last.get("status") or "").lower()
+            if status in ("succeeded", "failed", "canceled"):
+                return last
+        except Exception as e:
+            # Don’t fail the delete endpoint due to task polling.
+            return {"uid": task_uid, "status": "unknown", "poll_error": str(e)}
+
+        time.sleep(interval_s)
+
+    # Timed out waiting; return last known state (likely enqueued/processing)
+    return last or {"uid": task_uid, "status": "unknown", "note": "poll_timeout"}
+
 
 def sanitize_filename(name: str) -> str:
     # Keep original name as much as possible, but remove path separators and control chars.
@@ -29,15 +65,18 @@ def sanitize_filename(name: str) -> str:
     name = re.sub(r"[\x00-\x1f\x7f]", "", name).strip()
     return name
 
+
 def safe_id_from_filename(filename: str) -> str:
     # Used only for deleting transcripts index (primary key is `id` = base).
     # Replace anything outside [A-Za-z0-9_-] with underscore.
     base = Path(filename).stem
     return re.sub(r"[^A-Za-z0-9_-]+", "_", base).strip("_") or "file"
 
+
 @app.get("/health")
 def health():
     return jsonify({"ok": True, "time": int(time.time())})
+
 
 @app.post("/upload")
 def upload():
@@ -61,7 +100,9 @@ def upload():
 
         ext = Path(orig).suffix.lower()
         if ext not in AUDIO_EXTS:
-            rejected.append({"filename": orig, "reason": f"unsupported extension {ext}"})
+            rejected.append(
+                {"filename": orig, "reason": f"unsupported extension {ext}"}
+            )
             continue
 
         dest = Path(INCOMING_DIR) / orig
@@ -76,6 +117,7 @@ def upload():
         saved.append({"filename": orig, "bytes": dest.stat().st_size})
 
     return jsonify({"saved": saved, "rejected": rejected})
+
 
 @app.post("/meili/search/<index>")
 def meili_search(index: str):
@@ -98,6 +140,7 @@ def meili_search(index: str):
         return jsonify(r.json())
     except Exception as e:
         return jsonify({"error": f"meili proxy failed: {e}"}), 502
+
 
 @app.get("/status")
 def status():
@@ -124,20 +167,23 @@ def status():
     else:
         state = "missing"
 
-    return jsonify({
-        "ok": True,
-        "state": state,
-        "filename": filename,
-        "base": base,
-        "exists": {
-            "incoming": incoming_path.exists(),
-            "processing": processing_path.exists(),
-            "processed_audio": processed_audio.exists(),
-            "processed_txt": processed_txt.exists(),
-            "processed_srt": processed_srt.exists(),
-            "processed_vtt": processed_vtt.exists(),
-        },
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "state": state,
+            "filename": filename,
+            "base": base,
+            "exists": {
+                "incoming": incoming_path.exists(),
+                "processing": processing_path.exists(),
+                "processed_audio": processed_audio.exists(),
+                "processed_txt": processed_txt.exists(),
+                "processed_srt": processed_srt.exists(),
+                "processed_vtt": processed_vtt.exists(),
+            },
+        }
+    )
+
 
 @app.post("/delete")
 def delete():
@@ -181,6 +227,8 @@ def delete():
             )
             r.raise_for_status()
             tasks["segments"] = r.json()
+            if isinstance(tasks["segments"], dict) and "taskUid" in tasks["segments"]:
+                tasks["segments_task"] = wait_meili_task(tasks["segments"]["taskUid"])
         except Exception as e:
             tasks["segments_error"] = str(e)
 
@@ -223,6 +271,11 @@ def delete():
                     )
                     dr.raise_for_status()
 
+                    dj = dr.json() if dr.content else {}
+                    # Keep the last task status (good enough for minimal hardening)
+                    if isinstance(dj, dict) and "taskUid" in dj:
+                        tasks["segments_fallback_task"] = wait_meili_task(dj["taskUid"])
+
                     deleted += len(ids)
                     offset += limit
 
@@ -247,9 +300,21 @@ def delete():
         except Exception as e:
             tasks["transcripts_error"] = str(e)
 
-    return jsonify({
-        "ok": True,
-        "filename": filename,
-        "deleted_files": deleted_files,
-        "meili": tasks,
-    })
+    # If Meili explicitly failed, surface it as a non-ok response.
+    # Disk deletion may still have succeeded; this only reflects index cleanup status.
+    meili_failed = False
+    for k in ("segments_task", "segments_fallback_task"):
+        st = tasks.get(k) or {}
+        if isinstance(st, dict) and (st.get("status") or "").lower() == "failed":
+            meili_failed = True
+
+    ok = not meili_failed
+
+    return jsonify(
+        {
+            "ok": ok,
+            "filename": filename,
+            "deleted_files": deleted_files,
+            "meili": tasks,
+        }
+    )
