@@ -9,6 +9,7 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 INCOMING_DIR = os.environ.get("INCOMING_DIR", f"{DATA_DIR}/incoming")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", f"{DATA_DIR}/processed")
@@ -71,6 +72,124 @@ def safe_id_from_filename(filename: str) -> str:
     # Replace anything outside [A-Za-z0-9_-] with underscore.
     base = Path(filename).stem
     return re.sub(r"[^A-Za-z0-9_-]+", "_", base).strip("_") or "file"
+
+
+def _meili_request(method: str, path: str, json_body=None, timeout=5):
+    url = f"{MEILI_URL}{path}"
+    headers = {**meili_headers()}
+    if json_body is not None:
+        headers["Content-Type"] = "application/json"
+    r = requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
+    return r
+
+
+def ensure_meili_schema():
+    """
+    Best-effort verification that required indexes exist and have the settings
+    our API relies on (e.g., segments.filename filterable for delete-by-filter).
+    Never raises to caller; logs and returns a dict summary.
+    """
+    summary = {"ok": False, "steps": []}
+
+    if not MEILI_MASTER_KEY:
+        summary["steps"].append({"skip": "MEILI_MASTER_KEY not set"})
+        return summary
+
+    # Health check
+    try:
+        r = _meili_request("GET", "/health", timeout=3)
+        r.raise_for_status()
+        summary["steps"].append({"health": r.json()})
+    except Exception as e:
+        summary["steps"].append({"health_error": str(e)})
+        return summary
+
+    def _ensure_index(uid: str, primary_key: str = "id"):
+        # Create index if missing
+        try:
+            r = _meili_request("GET", f"/indexes/{uid}")
+            if r.status_code == 200:
+                summary["steps"].append({"index_exists": uid})
+                return True
+            if r.status_code != 404:
+                r.raise_for_status()
+        except Exception as e:
+            summary["steps"].append({"index_check_error": {uid: str(e)}})
+            return False
+
+        try:
+            r = _meili_request(
+                "POST",
+                "/indexes",
+                json_body={"uid": uid, "primaryKey": primary_key},
+                timeout=10,
+            )
+            # 200/202 on success; 409 if racing (fine)
+            if r.status_code not in (200, 202, 409):
+                r.raise_for_status()
+            summary["steps"].append({"index_created": uid, "status": r.status_code})
+            return True
+        except Exception as e:
+            summary["steps"].append({"index_create_error": {uid: str(e)}})
+            return False
+
+    # Ensure required indexes
+    if not _ensure_index(INDEX_TRANSCRIPTS, "id"):
+        return summary
+    if not _ensure_index(INDEX_SEGMENTS, "id"):
+        return summary
+
+    # Ensure settings: segments.filename is filterable
+    try:
+        r = _meili_request(
+            "GET", f"/indexes/{INDEX_SEGMENTS}/settings/filterable-attributes"
+        )
+        r.raise_for_status()
+        current = r.json() or []
+        if "filename" not in current:
+            new = list(current) + ["filename"]
+            r2 = _meili_request(
+                "PUT",
+                f"/indexes/{INDEX_SEGMENTS}/settings/filterable-attributes",
+                json_body=new,
+                timeout=10,
+            )
+            r2.raise_for_status()
+            summary["steps"].append({"filterable_added": "filename"})
+        else:
+            summary["steps"].append({"filterable_ok": "filename"})
+    except Exception as e:
+        summary["steps"].append({"filterable_error": str(e)})
+        return summary
+
+    # Optional: ensure sortable attributes exist (nice-to-have)
+    try:
+        _meili_request(
+            "PUT",
+            f"/indexes/{INDEX_TRANSCRIPTS}/settings/sortable-attributes",
+            json_body=["created_at"],
+            timeout=10,
+        )
+        _meili_request(
+            "PUT",
+            f"/indexes/{INDEX_SEGMENTS}/settings/sortable-attributes",
+            json_body=["created_at"],
+            timeout=10,
+        )
+        summary["steps"].append({"sortable_set": True})
+    except Exception as e:
+        summary["steps"].append({"sortable_error": str(e)})
+
+    summary["ok"] = True
+    return summary
+
+
+# Run Meili schema verification once at import time (gunicorn worker startup)
+try:
+    _MEILI_SCHEMA_STATUS = ensure_meili_schema()
+    print("Meili schema verification:", _MEILI_SCHEMA_STATUS, flush=True)
+except Exception as e:
+    print("Meili schema verification failed:", str(e), flush=True)
 
 
 @app.get("/health")
