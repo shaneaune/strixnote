@@ -184,12 +184,33 @@ def ensure_meili_schema():
     return summary
 
 
-# Run Meili schema verification once at import time (gunicorn worker startup)
-try:
-    _MEILI_SCHEMA_STATUS = ensure_meili_schema()
-    print("Meili schema verification:", _MEILI_SCHEMA_STATUS, flush=True)
-except Exception as e:
-    print("Meili schema verification failed:", str(e), flush=True)
+# Run Meili schema verification once per container start (avoid running in every gunicorn worker)
+# Uses a simple file lock in /tmp shared by all workers in the container.
+_LOCK_PATH = "/tmp/strixnote_meili_schema.lock"
+
+
+def _try_acquire_lock(path: str) -> bool:
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+        return True
+    except FileExistsError:
+        return False
+    except Exception:
+        # If locking fails for any other reason, fall back to running anyway.
+        return True
+
+
+if _try_acquire_lock(_LOCK_PATH):
+    try:
+        _MEILI_SCHEMA_STATUS = ensure_meili_schema()
+        print("Meili schema verification:", _MEILI_SCHEMA_STATUS, flush=True)
+    except Exception as e:
+        print("Meili schema verification failed:", str(e), flush=True)
+else:
+    print(
+        "Meili schema verification: skipped (another worker already ran it)", flush=True
+    )
 
 
 @app.get("/health")
