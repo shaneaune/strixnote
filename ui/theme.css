@@ -144,6 +144,11 @@ input[type="file"] {
   color: var(--color-text);
 }
 
+input:focus {
+  outline: none;
+  background: var(--color-surface-elevated);
+}
+
 /* Buttons */
 button, .btn {
   padding: 10px 14px;
@@ -261,4 +266,45 @@ audio { width: 100%; margin-top: 10px; }
 @keyframes progress-pulse {
   0%   { transform: translateX(-60%); }
   100% { transform: translateX(140%); }
+}
+
+/* Themed select (search mode dropdown) */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Focus state matches inputs */
+select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* Disabled state */
+select:disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+/* Optional: subtle dropdown arrow */
+select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-muted) 50%),
+    linear-gradient(135deg, var(--color-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 55%,
+    calc(100% - 11px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
 }

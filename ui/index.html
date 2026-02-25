@@ -53,50 +53,71 @@
         </div>
         <div id="uploadPhase" class="small muted" style="margin-top:6px;"></div>
       </div>
-
       <div class="tabs">
         <div class="tab active" id="tabSearch">Search</div>
         <div class="tab" id="tabBrowse">Browse</div>
       </div>
 
-      <div id="searchWrap">
-        <input id="searchBox" placeholder="Search..." />
+      <div id="searchWrap" style="display:flex; gap:10px; align-items:center;">
+        <select id="searchMode" style="max-width:160px;">
+          <option value="segments">Segments</option>
+          <option value="files">Files</option>
+        </select>
+        <input id="searchBox" placeholder="Search..." style="flex:1;" />
       </div>
 
       <div class="panel">
         <div id="nowPlayingTitle">Player</div>
         <div id="nowPlayingMeta" style="color:#999;"></div>
-        
+
         <audio id="player" controls preload="metadata"></audio>
         <div id="captionBox" class="captionBox"></div>
-        </div>
-        
-        <div id="results"></div>
-        
-        <div id="browsePager" class="pager" style="display:none;">
-          <button id="prevPage">Prev</button>
-          <span id="pagerInfo" style="padding:0 10px;"></span>
-          <button id="nextPage">Next</button>
-        </div>
-        
-        <script src="/config.js"></script>
-        
-        <script>
-          const MEILI = window.APP_CONFIG.MEILI_URL;
-          const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
-          const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
+      </div>
+
+      <div id="results"></div>
+
+      <div id="browsePager" class="pager" style="display:none;">
+        <button id="prevPage">Prev</button>
+        <span id="pagerInfo" style="padding:0 10px;"></span>
+        <button id="nextPage">Next</button>
+      </div>
+
+      <script src="/config.js"></script>
+
+      <script>
+        const MEILI = window.APP_CONFIG.MEILI_URL;
+        const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
+        const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
 
         const player = document.getElementById("player");
         const captionBox = document.getElementById("captionBox");
         const resultsDiv = document.getElementById("results");
         const searchBox = document.getElementById("searchBox");
+        const searchMode = document.getElementById("searchMode");
 
         let mode = "search";
         let browseOffset = 0;
         let searchOffset = 0;
         let searchQuery = "";
+        let searchModeValue = "segments";
+        const SEARCH_MODE_KEY = "strixnote_search_mode";
         let currentFile = null;
         const browseLimit = 20;
+
+        try {
+          const saved = localStorage.getItem(SEARCH_MODE_KEY);
+          if (saved === "segments" || saved === "files") searchModeValue = saved;
+        } catch (e) { }
+
+        if (searchMode) {
+          searchMode.value = searchModeValue;
+          searchMode.addEventListener("change", async () => {
+            searchModeValue = searchMode.value === "files" ? "files" : "segments";
+            try { localStorage.setItem(SEARCH_MODE_KEY, searchModeValue); } catch (e) { }
+            searchOffset = 0;
+            if (searchQuery) await performSearch();
+          });
+        }
 
         function baseName(f) { return f.replace(/\.[^/.]+$/, ""); }
         function msToHMS(ms) {
@@ -198,36 +219,53 @@
         async function performSearch() {
           if (!searchQuery) return;
 
-          const data = await meili(INDEX_SEG, {
+          const isFiles = (searchModeValue === "files");
+          const index = isFiles ? INDEX_FILES : INDEX_SEG;
+
+          const req = {
             q: searchQuery,
             limit: browseLimit,
             offset: searchOffset,
             sort: ["created_at:desc"],
             attributesToHighlight: ["text"],
             attributesToCrop: ["text"],
-            cropLength: 40
-          });
+            cropLength: 60
+          };
+
+          const data = await meili(index, req);
 
           resultsDiv.innerHTML = "";
           (data.hits || []).forEach(hit => {
             const div = document.createElement("div");
             div.className = "result";
-            div.innerHTML = `
-      <div class="file">${hit.filename}</div>
-      <div class="time">@ ${msToHMS(hit.start_ms)}</div>
-      <div class="dt">${epochToLocal(hit.created_at)}</div>
-      <div class="snippet">${hit._formatted?.text || hit.text}</div>
-    `;
-            div.onclick = () => loadFile(hit.filename, hit.start_ms);
+
+            if (isFiles) {
+              div.innerHTML = `
+        <div class="file">${hit.filename}</div>
+        <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
+        <div class="snippet">${hit._formatted?.text || hit.text || ""}</div>
+      `;
+              div.onclick = () => loadFile(hit.filename, 0);
+            } else {
+              div.innerHTML = `
+        <div class="file">${hit.filename}</div>
+        <div class="time">@ ${msToHMS(hit.start_ms)}</div>
+        <div class="dt">${epochToLocal(hit.created_at)}</div>
+        <div class="snippet">${hit._formatted?.text || hit.text}</div>
+      `;
+              div.onclick = () => loadFile(hit.filename, hit.start_ms);
+            }
+
             resultsDiv.appendChild(div);
           });
 
-          // Pager button states
+          // Pager + count
           const total = data.estimatedTotalHits ?? 0;
           const start = total === 0 ? 0 : searchOffset + 1;
           const end = Math.min(searchOffset + (data.hits?.length || 0), total);
           document.getElementById("pagerInfo").textContent =
             total === 0 ? "No results" : `${start}-${end} of ${total}`;
+
           document.getElementById("prevPage").disabled = (searchOffset === 0);
           document.getElementById("nextPage").disabled = !data.hits || data.hits.length < browseLimit;
         }
