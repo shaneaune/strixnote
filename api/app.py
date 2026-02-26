@@ -139,25 +139,36 @@ def ensure_meili_schema():
     if not _ensure_index(INDEX_SEGMENTS, "id"):
         return summary
 
-    # Ensure settings: segments.filename is filterable
+    # Ensure filterable attributes needed by the UI/API
+    # segments: delete-by-filter + date filtering
+    # transcripts: date filtering
     try:
-        r = _meili_request(
-            "GET", f"/indexes/{INDEX_SEGMENTS}/settings/filterable-attributes"
-        )
-        r.raise_for_status()
-        current = r.json() or []
-        if "filename" not in current:
-            new = list(current) + ["filename"]
-            r2 = _meili_request(
-                "PUT",
-                f"/indexes/{INDEX_SEGMENTS}/settings/filterable-attributes",
-                json_body=new,
-                timeout=10,
-            )
-            r2.raise_for_status()
-            summary["steps"].append({"filterable_added": "filename"})
-        else:
-            summary["steps"].append({"filterable_ok": "filename"})
+        desired_segments = {"filename", "created_at", "recorded_at"}
+        desired_transcripts = {"created_at", "recorded_at"}
+
+        def ensure_filterables(index_uid: str, desired: set[str]):
+            r = _meili_request("GET", f"/indexes/{index_uid}/settings/filterable-attributes")
+            r.raise_for_status()
+            current = set(r.json() or [])
+            missing = sorted(desired - current)
+            if missing:
+                new = sorted(current | desired)
+                r2 = _meili_request(
+                    "PUT",
+                    f"/indexes/{index_uid}/settings/filterable-attributes",
+                    json_body=new,
+                    timeout=10,
+                )
+                r2.raise_for_status()
+                summary["steps"].append(
+                    {"filterable_added": {"index": index_uid, "added": missing}}
+                )
+            else:
+                summary["steps"].append({"filterable_ok": {"index": index_uid}})
+
+        ensure_filterables(INDEX_SEGMENTS, desired_segments)
+        ensure_filterables(INDEX_TRANSCRIPTS, desired_transcripts)
+
     except Exception as e:
         summary["steps"].append({"filterable_error": str(e)})
         return summary

@@ -171,6 +171,7 @@ def main():
                     "filename": name,
                     "text": full_text,
                     "created_at": now,
+                    "recorded_at": now,  # TODO: replace with real media/filename timestamp when available
                     "audio_bytes": audio_bytes,
                     "duration_s": duration_s,
                 }
