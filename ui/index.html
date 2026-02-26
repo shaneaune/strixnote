@@ -370,13 +370,28 @@
           });
         };
 
-        document.getElementById("tabSearch").onclick = () => {
+        document.getElementById("tabSearch").onclick = async () => {
+          const wasSearch = (mode === "search");
+
           mode = "search";
           document.getElementById("tabSearch").classList.add("active");
           document.getElementById("tabBrowse").classList.remove("active");
           document.getElementById("searchWrap").style.display = "block";
-          document.getElementById("browsePager").style.display = "none";
-          resultsDiv.innerHTML = "";
+          document.getElementById("browsePager").style.display = "flex";
+
+          // If we were already on Search, clicking the tab acts like "Search"
+          if (wasSearch) {
+            const q = (searchBox?.value || "").trim();
+            if (q) {
+              searchQuery = q;
+              searchOffset = 0;
+              await performSearch();
+              return;
+            }
+          }
+
+          // If switching into Search mode, don't clear results if a query already exists.
+          if (!searchQuery) resultsDiv.innerHTML = "";
         };
 
         const uploadFiles = document.getElementById("uploadFiles");
