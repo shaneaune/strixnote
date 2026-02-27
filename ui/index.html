@@ -319,7 +319,7 @@
 
           const q = e.target.value.trim();
           searchQuery = q; // allow empty query when date filter is set
-          
+
           searchOffset = 0;
           mode = "search";
 
@@ -347,6 +347,10 @@
             document.getElementById("browsePager").style.display = "flex";
 
             await performSearch();
+
+            // Reset date filter after executing search
+            if (dateField) dateField.value = "";
+            if (dateValue) dateValue.value = "";
           });
         }
 
