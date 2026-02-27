@@ -319,8 +319,7 @@
 
           const q = e.target.value.trim();
           searchQuery = q; // allow empty query when date filter is set
-
-          searchQuery = q;
+          
           searchOffset = 0;
           mode = "search";
 
@@ -331,6 +330,25 @@
 
           await performSearch();
         });
+
+        const searchBtn = document.getElementById("searchBtn");
+
+        if (searchBtn) {
+          searchBtn.addEventListener("click", async () => {
+            const q = (searchBox?.value || "").trim();
+
+            searchQuery = q; // may be empty for date-only
+            searchOffset = 0;
+            mode = "search";
+
+            document.getElementById("tabSearch").classList.add("active");
+            document.getElementById("tabBrowse").classList.remove("active");
+            document.getElementById("searchWrap").style.display = "block";
+            document.getElementById("browsePager").style.display = "flex";
+
+            await performSearch();
+          });
+        }
 
         document.getElementById("tabBrowse").onclick = async () => {
           mode = "browse";
