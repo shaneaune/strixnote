@@ -417,9 +417,11 @@
 
             // click anywhere except delete → play
             div.onclick = (e) => {
-              if (!e.target.classList.contains("btn-delete")) {
-                loadFile(hit.filename, 0);
+              // If clicking a button or link, do not trigger playback
+              if (e.target.closest("a") || e.target.classList.contains("btn-delete")) {
+                return;
               }
+              loadFile(hit.filename, 0);
             };
 
 
