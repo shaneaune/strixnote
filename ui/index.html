@@ -228,12 +228,12 @@
         }
 
         async function performSearch() {
-          if (!searchQuery) return;
 
           let filter = null;
 
-          const field = (dateField?.value || "").trim();
           const day = (dateValue?.value || "").trim();
+          let field = (dateField?.value || "").trim();
+          if (!field && day) field = "created_at";
 
           if ((field === "created_at" || field === "recorded_at") && day) {
             // day is YYYY-MM-DD; compute local day start/end, convert to epoch seconds
@@ -246,6 +246,8 @@
 
             filter = `${field} >= ${startSec} AND ${field} < ${endSec}`;
           }
+
+          if (!searchQuery && !filter) return;
 
           const isFiles = (searchModeValue === "files");
           const index = isFiles ? INDEX_FILES : INDEX_SEG;
@@ -303,7 +305,7 @@
           if (e.key !== "Enter") return;
 
           const q = e.target.value.trim();
-          if (!q) return;
+          searchQuery = q; // allow empty query when date filter is set
 
           searchQuery = q;
           searchOffset = 0;
@@ -411,8 +413,11 @@
           // If we were already on Search, clicking the tab acts like "Search"
           if (wasSearch) {
             const q = (searchBox?.value || "").trim();
-            if (q) {
-              searchQuery = q;
+            const hasDay = !!(dateValue?.value || "").trim();
+
+            // Run search if we have a query OR a date selected (date-only search)
+            if (q || hasDay) {
+              searchQuery = q; // may be empty for date-only
               searchOffset = 0;
               await performSearch();
               return;
