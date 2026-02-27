@@ -295,7 +295,7 @@
 
           if (!searchQuery && !filter) return;
 
-          const isFiles = (searchModeValue === "files");
+          const isFiles = (searchModeValue === "files") || (!searchQuery && !!filter);
           const index = isFiles ? INDEX_FILES : INDEX_SEG;
 
           const req = {
