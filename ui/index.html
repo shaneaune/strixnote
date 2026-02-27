@@ -153,10 +153,10 @@
         }
         function epochToLocal(e) {
           const d = new Date(e * 1000);
+          const yy = d.getFullYear();
           const mm = String(d.getMonth() + 1).padStart(2, "0");
           const dd = String(d.getDate()).padStart(2, "0");
-          const yy = d.getFullYear();
-          return `${mm}/${dd}/${yy}`;
+          return `${yy}/${mm}/${dd}`;
         }
 
         async function meili(index, body) {
