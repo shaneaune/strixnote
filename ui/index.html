@@ -73,8 +73,10 @@
             <option value="recorded_at">Recorded date</option>
           </select>
 
-          <input type="date" id="dateValue"
+          <input type="date" id="dateStart"
             style="width:160px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+
+          <input type="date" id="dateEnd" style="width:160px; height:38px; padding:6px 10px; box-sizing:border-box;" />
         </div>
 
         <div class="row" style="display:flex; gap:10px; align-items:center; flex-wrap:nowrap;">
@@ -117,7 +119,8 @@
         const searchBox = document.getElementById("searchBox");
         const searchMode = document.getElementById("searchMode");
         const dateField = document.getElementById("dateField");
-        const dateValue = document.getElementById("dateValue");
+        const dateStart = document.getElementById("dateStart");
+        const dateEnd = document.getElementById("dateEnd");
 
         let mode = "search";
         let browseOffset = 0;
@@ -250,18 +253,24 @@
 
           let filter = null;
 
-          const day = (dateValue?.value || "").trim();
-          let field = (dateField?.value || "").trim();
-          if (!field && day) field = "created_at";
+          const startDay = (dateStart?.value || "").trim();
+          const endDayRaw = (dateEnd?.value || "").trim();
 
-          if ((field === "created_at" || field === "recorded_at") && day) {
-            // day is YYYY-MM-DD; compute local day start/end, convert to epoch seconds
-            const start = new Date(day + "T00:00:00");
-            const end = new Date(day + "T00:00:00");
-            end.setDate(end.getDate() + 1);
+          let field = (dateField?.value || "").trim();
+          // If "Any date" selected but a start date is set, default to uploaded date
+          if (!field && startDay) field = "created_at";
+
+          // If end is blank, treat it as same day as start (single-day range)
+          const endDay = endDayRaw || startDay;
+
+          if ((field === "created_at" || field === "recorded_at") && startDay) {
+            // start/end are YYYY-MM-DD; compute local day start; end is inclusive, so add 1 day for exclusive bound
+            const start = new Date(startDay + "T00:00:00");
+            const endExclusive = new Date(endDay + "T00:00:00");
+            endExclusive.setDate(endExclusive.getDate() + 1);
 
             const startSec = Math.floor(start.getTime() / 1000);
-            const endSec = Math.floor(end.getTime() / 1000);
+            const endSec = Math.floor(endExclusive.getTime() / 1000);
 
             filter = `${field} >= ${startSec} AND ${field} < ${endSec}`;
           }
@@ -338,7 +347,8 @@
 
           // Reset date filter after executing search
           if (dateField) dateField.value = "";
-          if (dateValue) dateValue.value = "";
+          if (dateStart) dateStart.value = "";
+          if (dateEnd) dateEnd.value = "";
         });
 
         const searchBtn = document.getElementById("searchBtn");
@@ -360,7 +370,8 @@
 
             // Reset date filter after executing search
             if (dateField) dateField.value = "";
-            if (dateValue) dateValue.value = "";
+            if (dateStart) dateStart.value = "";
+            if (dateEnd) dateEnd.value = "";
           });
         }
 
@@ -460,7 +471,7 @@
           // If we were already on Search, clicking the tab acts like "Search"
           if (wasSearch) {
             const q = (searchBox?.value || "").trim();
-            const hasDay = !!(dateValue?.value || "").trim();
+            const hasDay = !!((dateStart?.value || "").trim() || (dateEnd?.value || "").trim());
 
             // Run search if we have a query OR a date selected (date-only search)
             if (q || hasDay) {
@@ -469,7 +480,8 @@
               await performSearch();
               // Reset date filter after executing search
               if (dateField) dateField.value = "";
-              if (dateValue) dateValue.value = "";
+              if (dateStart) dateStart.value = "";
+              if (dateEnd) dateEnd.value = "";
               return;
             }
           }
