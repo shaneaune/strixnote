@@ -58,21 +58,30 @@
         <div class="tab" id="tabBrowse">Browse</div>
       </div>
 
-      <div id="searchWrap" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <select id="searchMode" style="max-width:160px;">
-          <option value="segments">Segments</option>
-          <option value="files">Files</option>
-        </select>
+      <div id="searchWrap" style="display:flex; flex-direction:column; gap:10px;">
 
-        <select id="dateField" style="max-width:160px;">
-          <option value="">Any date</option>
-          <option value="created_at">Uploaded date</option>
-          <option value="recorded_at">Recorded date</option>
-        </select>
+        <!-- Row 1: mode + date -->
+        <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="searchMode" style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
+            <option value="segments">Segments</option>
+            <option value="files">Files</option>
+          </select>
 
-        <input type="date" id="dateValue" />
+          <select id="dateField" style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
+            <option value="">Any date</option>
+            <option value="created_at">Uploaded date</option>
+            <option value="recorded_at">Recorded date</option>
+          </select>
 
-        <input id="searchBox" placeholder="Search..." style="flex:1; min-width:200px;" />
+          <input type="date" id="dateValue"
+            style="width:160px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+        </div>
+
+        <!-- Row 2: search box (button later) -->
+        <div class="row" style="gap:10px; align-items:center;">
+          <input id="searchBox" placeholder="Search..." style="flex:1; min-width:200px;" />
+        </div>
+
       </div>
 
       <div class="panel">
