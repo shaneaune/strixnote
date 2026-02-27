@@ -329,6 +329,10 @@
           document.getElementById("browsePager").style.display = "flex";
 
           await performSearch();
+
+          // Reset date filter after executing search
+          if (dateField) dateField.value = "";
+          if (dateValue) dateValue.value = "";
         });
 
         const searchBtn = document.getElementById("searchBtn");
@@ -455,6 +459,9 @@
               searchQuery = q; // may be empty for date-only
               searchOffset = 0;
               await performSearch();
+              // Reset date filter after executing search
+              if (dateField) dateField.value = "";
+              if (dateValue) dateValue.value = "";
               return;
             }
           }
