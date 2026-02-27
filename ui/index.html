@@ -86,6 +86,9 @@
           <button id="searchBtn" class="btn btn-primary" type="button" style="height:38px;">
             Search
           </button>
+          <button id="clearBtn" class="btn btn-primary" type="button" style="height:38px;">
+            Clear
+          </button>
 
         </div>
       </div>
@@ -372,6 +375,25 @@
             if (dateField) dateField.value = "";
             if (dateStart) dateStart.value = "";
             if (dateEnd) dateEnd.value = "";
+          });
+        }
+
+        const clearBtn = document.getElementById("clearBtn");
+
+        if (clearBtn) {
+          clearBtn.addEventListener("click", () => {
+            if (searchBox) searchBox.value = "";
+            if (dateField) dateField.value = "";
+            if (dateStart) dateStart.value = "";
+            if (dateEnd) dateEnd.value = "";
+
+            searchQuery = "";
+            searchOffset = 0;
+
+            resultsDiv.innerHTML = "";
+            document.getElementById("pagerInfo").textContent = "No results";
+            document.getElementById("prevPage").disabled = true;
+            document.getElementById("nextPage").disabled = true;
           });
         }
 
