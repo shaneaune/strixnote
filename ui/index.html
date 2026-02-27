@@ -151,7 +151,13 @@
           const sec = s % 60;
           return [h, m, sec].map(v => String(v).padStart(2, "0")).join(":");
         }
-        function epochToLocal(e) { return new Date(e * 1000).toLocaleString(); }
+        function epochToLocal(e) {
+          const d = new Date(e * 1000);
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          const yy = d.getFullYear();
+          return `${mm}/${dd}/${yy}`;
+        }
 
         async function meili(index, body) {
           const r = await fetch(`${MEILI}/search/${index}`, {
