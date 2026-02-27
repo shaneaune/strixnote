@@ -254,6 +254,7 @@
             q: searchQuery,
             limit: browseLimit,
             offset: searchOffset,
+            filter: filter || undefined,
             sort: ["created_at:desc"],
             attributesToHighlight: ["text"],
             attributesToCrop: ["text"],
