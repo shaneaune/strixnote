@@ -77,6 +77,11 @@
             style="width:160px; height:38px; padding:6px 10px; box-sizing:border-box;" />
           <span class="small muted" style="padding:0 4px;">To</span>
           <input type="date" id="dateEnd" style="width:160px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+
+          <button id="presetToday" class="btn btn-secondary" type="button" style="height:38px;">Today</button>
+          <button id="preset7d" class="btn btn-secondary" type="button" style="height:38px;">Last 7</button>
+          <button id="preset30d" class="btn btn-secondary" type="button" style="height:38px;">Last 30</button>
+
         </div>
 
         <div class="row" style="display:flex; gap:10px; align-items:center; flex-wrap:nowrap;">
@@ -124,6 +129,9 @@
         const dateField = document.getElementById("dateField");
         const dateStart = document.getElementById("dateStart");
         const dateEnd = document.getElementById("dateEnd");
+        const presetToday = document.getElementById("presetToday");
+        const preset7d = document.getElementById("preset7d");
+        const preset30d = document.getElementById("preset30d");
 
         let mode = "search";
         let browseOffset = 0;
@@ -403,6 +411,43 @@
             document.getElementById("nextPage").disabled = true;
           });
         }
+
+        function ymdLocal(d) {
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          const yy = d.getFullYear();
+          return `${yy}-${mm}-${dd}`;
+        }
+
+        async function runPreset(daysBack) {
+          const today = new Date();
+          const start = new Date();
+          start.setDate(today.getDate() - (daysBack - 1)); // inclusive range
+
+          if (dateField && !dateField.value) dateField.value = "created_at";
+          if (dateStart) dateStart.value = ymdLocal(start);
+          if (dateEnd) dateEnd.value = ymdLocal(today);
+
+          searchQuery = (searchBox?.value || "").trim(); // allow optional term
+          searchOffset = 0;
+          mode = "search";
+
+          document.getElementById("tabSearch").classList.add("active");
+          document.getElementById("tabBrowse").classList.remove("active");
+          document.getElementById("searchWrap").style.display = "block";
+          document.getElementById("browsePager").style.display = "flex";
+
+          await performSearch();
+
+          // Clear date fields after executing search (consistent behavior)
+          if (dateField) dateField.value = "";
+          if (dateStart) dateStart.value = "";
+          if (dateEnd) dateEnd.value = "";
+        }
+
+        if (presetToday) presetToday.addEventListener("click", () => runPreset(1));
+        if (preset7d) preset7d.addEventListener("click", () => runPreset(7));
+        if (preset30d) preset30d.addEventListener("click", () => runPreset(30));
 
         document.getElementById("tabBrowse").onclick = async () => {
           mode = "browse";
