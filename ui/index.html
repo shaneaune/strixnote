@@ -58,12 +58,21 @@
         <div class="tab" id="tabBrowse">Browse</div>
       </div>
 
-      <div id="searchWrap" style="display:flex; gap:10px; align-items:center;">
+      <div id="searchWrap" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <select id="searchMode" style="max-width:160px;">
           <option value="segments">Segments</option>
           <option value="files">Files</option>
         </select>
-        <input id="searchBox" placeholder="Search..." style="flex:1;" />
+
+        <select id="dateField" style="max-width:160px;">
+          <option value="">Any date</option>
+          <option value="created_at">Uploaded date</option>
+          <option value="recorded_at">Recorded date</option>
+        </select>
+
+        <input type="date" id="dateValue" />
+
+        <input id="searchBox" placeholder="Search..." style="flex:1; min-width:200px;" />
       </div>
 
       <div class="panel">

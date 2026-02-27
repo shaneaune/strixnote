@@ -108,6 +108,18 @@ html, body {
   border-color: var(--color-primary);
 }
 
+#searchBox:focus,
+#searchBox:active {
+  background: var(--color-surface-elevated) !important;
+  color: var(--color-text) !important;
+}
+
+#searchBox:-webkit-autofill,
+#searchBox:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface-elevated) inset !important;
+  -webkit-text-fill-color: var(--color-text) !important;
+}
+
 /* Inputs (search box MUST be full width + dark) */
 input[type="text"],
 input[type="search"],
