@@ -75,7 +75,7 @@
 
           <input type="date" id="dateStart"
             style="width:160px; height:38px; padding:6px 10px; box-sizing:border-box;" />
-
+          <span class="small muted" style="padding:0 4px;">To</span>
           <input type="date" id="dateEnd" style="width:160px; height:38px; padding:6px 10px; box-sizing:border-box;" />
         </div>
 
@@ -264,13 +264,20 @@
           if (!field && startDay) field = "created_at";
 
           // If end is blank, treat it as same day as start (single-day range)
-          const endDay = endDayRaw || startDay;
+          let endDay = endDayRaw || startDay;
 
           if ((field === "created_at" || field === "recorded_at") && startDay) {
             // start/end are YYYY-MM-DD; compute local day start; end is inclusive, so add 1 day for exclusive bound
-            const start = new Date(startDay + "T00:00:00");
-            const endExclusive = new Date(endDay + "T00:00:00");
+            let start = new Date(startDay + "T00:00:00");
+            let endExclusive = new Date(endDay + "T00:00:00");
             endExclusive.setDate(endExclusive.getDate() + 1);
+
+            // If end < start, swap them (keep endExclusive as exclusive bound)
+            if (endExclusive.getTime() < start.getTime()) {
+              start = new Date(endDay + "T00:00:00");
+              endExclusive = new Date(startDay + "T00:00:00");
+              endExclusive.setDate(endExclusive.getDate() + 1);
+            }
 
             const startSec = Math.floor(start.getTime() / 1000);
             const endSec = Math.floor(endExclusive.getTime() / 1000);
