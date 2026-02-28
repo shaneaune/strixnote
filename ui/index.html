@@ -474,36 +474,45 @@
             const div = document.createElement("div");
             div.className = "result";
             div.innerHTML = `
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <div>
-      <div class="file">${hit.filename}</div>
-      <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
-    </div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <a class="btn btn-secondary"
-           href="/audio/${baseName(hit.filename)}.txt"
-           download>
-          TXT
-        </a>
-        <a class="btn btn-secondary"
-           href="/audio/${hit.filename}"
-           download>
-          Audio
-        </a>
-        <button class="btn btn-secondary btn-delete"
-                data-fn="${hit.filename}"
-                ${currentFile === hit.filename ? "disabled" : ""}>
-          Delete
-        </button>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div class="file">${hit.filename}</div>
+        <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
       </div>
-  </div>
-`;
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-secondary btn-text" type="button" data-fn="${hit.filename}">
+            Text
+          </button>
+          <a class="btn btn-secondary"
+             href="/audio/${baseName(hit.filename)}.txt"
+             download>
+            TXT
+          </a>
+          <a class="btn btn-secondary"
+             href="/audio/${hit.filename}"
+             download>
+            Audio
+          </a>
+          <button class="btn btn-secondary btn-delete"
+                  data-fn="${hit.filename}"
+                  ${currentFile === hit.filename ? "disabled" : ""}>
+            Delete
+          </button>
+        </div>
+    </div>
 
+    <div class="transcriptWrap" style="display:none; margin-top:10px;">
+      <div class="small muted" style="margin-bottom:6px;">Transcript</div>
+      <div class="transcriptBox"
+           style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
+      </div>
+    </div>
+  `;
 
             // click anywhere except delete → play
             div.onclick = (e) => {
               // If clicking a button or link, do not trigger playback
-              if (e.target.closest("a") || e.target.classList.contains("btn-delete")) {
+              if (e.target.closest("a") || e.target.closest("button")) {
                 return;
               }
               loadFile(hit.filename, 0);
@@ -529,7 +538,39 @@
 
               div.remove();
             };
+            const textBtn = div.querySelector(".btn-text");
+            const transcriptWrap = div.querySelector(".transcriptWrap");
+            const transcriptBox = div.querySelector(".transcriptBox");
 
+            if (textBtn && transcriptWrap && transcriptBox) {
+              textBtn.onclick = async (e) => {
+                e.stopPropagation();
+
+                const isOpen = transcriptWrap.style.display !== "none";
+                if (isOpen) {
+                  transcriptWrap.style.display = "none";
+                  return;
+                }
+
+                transcriptWrap.style.display = "block";
+
+                // Lazy-load transcript once
+                if (!transcriptBox.dataset.loaded) {
+                  transcriptBox.textContent = "Loading...";
+                  try {
+                    const fn = textBtn.getAttribute("data-fn") || "";
+                    const txtUrl = "/audio/" + encodeURIComponent(baseName(fn) + ".txt");
+                    const r = await fetch(txtUrl);
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    const txt = await r.text();
+                    transcriptBox.textContent = txt || "(empty)";
+                    transcriptBox.dataset.loaded = "1";
+                  } catch (err) {
+                    transcriptBox.textContent = "Failed to load transcript.";
+                  }
+                }
+              };
+            }
           });
         };
 
