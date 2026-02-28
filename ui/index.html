@@ -480,24 +480,33 @@
         <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
       </div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button class="btn btn-secondary btn-text" type="button" data-fn="${hit.filename}">
-            Text
-          </button>
-          <a class="btn btn-secondary"
-             href="/audio/${baseName(hit.filename)}.txt"
-             download>
-            TXT
-          </a>
-          <a class="btn btn-secondary"
-             href="/audio/${hit.filename}"
-             download>
-            Audio
-          </a>
-          <button class="btn btn-secondary btn-delete"
-                  data-fn="${hit.filename}"
-                  ${currentFile === hit.filename ? "disabled" : ""}>
-            Delete
-          </button>
+                      <button class="btn btn-secondary btn-text"
+                    type="button"
+                    data-fn="${hit.filename}"
+                    style="height:38px; display:inline-flex; align-items:center;">
+              Text
+            </button>
+
+            <a class="btn btn-secondary"
+               href="/audio/${baseName(hit.filename)}.txt"
+               download
+               style="height:38px; display:inline-flex; align-items:center;">
+              Download
+            </a>
+
+            <a class="btn btn-secondary"
+               href="/audio/${hit.filename}"
+               download
+               style="height:38px; display:inline-flex; align-items:center;">
+              Audio
+            </a>
+
+            <button class="btn btn-secondary btn-delete"
+                    data-fn="${hit.filename}"
+                    ${currentFile === hit.filename ? "disabled" : ""}
+                    style="height:38px; display:inline-flex; align-items:center;">
+              Delete
+            </button>
         </div>
     </div>
 
@@ -546,13 +555,20 @@
               textBtn.onclick = async (e) => {
                 e.stopPropagation();
 
+                // Close any other open transcripts
+                document.querySelectorAll("#results .transcriptWrap").forEach(w => {
+                  if (w !== transcriptWrap) w.style.display = "none";
+                });
+
                 const isOpen = transcriptWrap.style.display !== "none";
                 if (isOpen) {
                   transcriptWrap.style.display = "none";
+                  textBtn.textContent = "Text";
                   return;
                 }
 
                 transcriptWrap.style.display = "block";
+                textBtn.textContent = "Hide";
 
                 // Lazy-load transcript once
                 if (!transcriptBox.dataset.loaded) {
