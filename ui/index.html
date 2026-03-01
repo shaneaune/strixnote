@@ -28,7 +28,7 @@
 
     <div class="header">
       <div class="brand" style="display:flex; flex-direction:column;">
-        <img src="/assets/strixnote-logo.png" alt="StrixNote" <img src="/assets/strixnote-logo.png" alt="StrixNote"
+        <img src="/assets/strixnote-logo1.png" alt="StrixNote" <img src="/assets/strixnote-logo1.png" alt="StrixNote"
           style="height:150px; width:auto; object-fit:contain; display:block;">
         <div class="brand-subtitle" style="margin-top:4px;">
           Wisdom that never leaves the nest.
@@ -329,12 +329,138 @@
 
             if (isFiles) {
               div.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
         <div class="file">${hit.filename}</div>
         <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
-        <div class="snippet">${hit._formatted?.text || hit.text || ""}</div>
-      `;
-              div.onclick = () => loadFile(hit.filename, 0);
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-secondary btn-text"
+                type="button"
+                data-fn="${hit.filename}"
+                style="height:38px; display:inline-flex; align-items:center;">
+          Text
+        </button>
+
+        <a class="btn btn-secondary"
+           href="/audio/${baseName(hit.filename)}.txt"
+           download
+           style="height:38px; display:inline-flex; align-items:center;">
+          Download
+        </a>
+
+        <a class="btn btn-secondary"
+           href="/audio/${hit.filename}"
+           download
+           style="height:38px; display:inline-flex; align-items:center;">
+          Audio
+        </a>
+
+        <button class="btn btn-secondary btn-delete"
+                data-fn="${hit.filename}"
+                ${currentFile === hit.filename ? "disabled" : ""}
+                style="height:38px; display:inline-flex; align-items:center;">
+          Delete
+        </button>
+      </div>
+    </div>
+
+    <div class="transcriptWrap" style="max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease; margin-top:10px;">
+      <div class="small muted" style="margin-bottom:6px;">Transcript</div>
+      <div class="transcriptBox"
+           style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
+      </div>
+    </div>
+  `;
+
+              // click anywhere except buttons/links -> play
+              div.onclick = (e) => {
+                if (e.target.closest("a") || e.target.closest("button")) return;
+                loadFile(hit.filename, 0);
+              };
+
+              // delete
+              const delBtn = div.querySelector(".btn-delete");
+              if (delBtn) {
+                delBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
+
+                  const resp = await fetch("/api/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename: hit.filename })
+                  });
+
+                  const data = await resp.json();
+                  if (!resp.ok) {
+                    alert("Delete failed: " + (data.error || resp.statusText));
+                    return;
+                  }
+
+                  div.remove();
+                  refreshBrowseIfVisible();
+                };
+              }
+
+              // transcript toggle (auto-close others)
+              const textBtn = div.querySelector(".btn-text");
+              const transcriptWrap = div.querySelector(".transcriptWrap");
+              const transcriptBox = div.querySelector(".transcriptBox");
+
+              if (textBtn && transcriptWrap && transcriptBox) {
+                textBtn.onclick = async (e) => {
+                  e.stopPropagation();
+
+                  // Helper to close a row smoothly
+                  const closeWrap = (w) => {
+                    w.classList.remove("open");
+                    w.style.maxHeight = "0px";
+                    w.style.opacity = "0";
+
+                    const b = w.closest(".result")?.querySelector(".btn-text");
+                    if (b) b.textContent = "Text";
+                  };
+
+                  // Close any other open transcripts
+                  document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
+                    if (w !== transcriptWrap) closeWrap(w);
+                  });
+
+                  const isOpen = transcriptWrap.classList.contains("open");
+                  if (isOpen) {
+                    closeWrap(transcriptWrap);
+                    return;
+                  }
+
+                  // Open smoothly
+                  transcriptWrap.classList.add("open");
+                  transcriptWrap.style.opacity = "1";
+                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                  textBtn.textContent = "Hide";
+
+                  // Lazy-load transcript once
+                  if (!transcriptBox.dataset.loaded) {
+                    transcriptBox.textContent = "Loading...";
+                    try {
+                      const fn = textBtn.getAttribute("data-fn") || hit.filename || "";
+                      const txtUrl = "/audio/" + encodeURIComponent(baseName(fn) + ".txt");
+                      const r = await fetch(txtUrl);
+                      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                      const txt = await r.text();
+                      transcriptBox.textContent = txt || "(empty)";
+                      transcriptBox.dataset.loaded = "1";
+
+                      // Re-expand after content loads
+                      transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                    } catch (err) {
+                      transcriptBox.textContent = "Failed to load transcript.";
+                    }
+                  }
+                };
+              }
             } else {
+
               div.innerHTML = `
         <div class="file">${hit.filename}</div>
         <div class="time">@ ${msToHMS(hit.start_ms)}</div>
@@ -575,6 +701,9 @@
 
                   const b = w.closest(".result")?.querySelector(".btn-text");
                   if (b) b.textContent = "Text";
+
+                  // actually hide after the collapse transition
+                  setTimeout(() => { w.style.display = "none"; }, 180);
                 };
 
                 // Close any other open transcripts
@@ -586,22 +715,20 @@
                 if (isOpen) {
                   closeWrap(transcriptWrap);
                   return;
-
-                  // Open this transcript
-                  transcriptWrap.classList.add("open");
-                  transcriptWrap.style.opacity = "1";
-
-                  // Expand to content height
-                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-
-                  textBtn.textContent = "Hide";
                 }
 
                 // Open smoothly
+                transcriptWrap.style.display = "block";
                 transcriptWrap.classList.add("open");
-                transcriptWrap.style.opacity = "1";
-                transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                transcriptWrap.style.opacity = "0";
+                transcriptWrap.style.maxHeight = "0px";
                 textBtn.textContent = "Hide";
+
+                // wait one frame so display:block applies, then measure/expand
+                requestAnimationFrame(() => {
+                  transcriptWrap.style.opacity = "1";
+                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                });
 
                 // Lazy-load transcript once
                 if (!transcriptBox.dataset.loaded) {
