@@ -523,12 +523,13 @@
         </div>
     </div>
 
-<div class="transcriptWrap" style="margin-top:10px;">
-  <div class="small muted" style="margin-bottom:6px;">Transcript</div>
-  <div class="transcriptBox"
-       style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
-  </div>
-</div>
+      <div class="transcriptWrap"
+     style="margin-top:10px; max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease;">
+        <div class="small muted" style="margin-bottom:6px;">Transcript</div>
+        <div class="transcriptBox"
+             style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
+        </div>
+      </div>
   `;
 
             // click anywhere except delete → play
@@ -587,6 +588,15 @@
                 if (isOpen) {
                   closeWrap(transcriptWrap);
                   return;
+
+                  // Open this transcript
+                  transcriptWrap.classList.add("open");
+                  transcriptWrap.style.opacity = "1";
+
+                  // Expand to content height
+                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+
+                  textBtn.textContent = "Hide";
                 }
 
                 // Open smoothly
