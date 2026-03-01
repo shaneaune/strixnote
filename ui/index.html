@@ -8,6 +8,19 @@
   <link rel="stylesheet" href="theme.css">
   <link rel="icon" type="image/png" href="/assets/strixnote-icon.png">
 
+  <style>
+    .transcriptWrap {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: max-height 180ms ease, opacity 180ms ease;
+    }
+
+    .transcriptWrap.open {
+      opacity: 1;
+    }
+  </style>
+
 </head>
 
 <body>
@@ -510,12 +523,12 @@
         </div>
     </div>
 
-    <div class="transcriptWrap" style="display:none; margin-top:10px;">
-      <div class="small muted" style="margin-bottom:6px;">Transcript</div>
-      <div class="transcriptBox"
-           style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
-      </div>
-    </div>
+<div class="transcriptWrap" style="margin-top:10px;">
+  <div class="small muted" style="margin-bottom:6px;">Transcript</div>
+  <div class="transcriptBox"
+       style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
+  </div>
+</div>
   `;
 
             // click anywhere except delete → play
@@ -555,19 +568,31 @@
               textBtn.onclick = async (e) => {
                 e.stopPropagation();
 
+                // Helper to close a row smoothly
+                const closeWrap = (w) => {
+                  w.classList.remove("open");
+                  w.style.maxHeight = "0px";
+                  w.style.opacity = "0";
+
+                  const b = w.closest(".result")?.querySelector(".btn-text");
+                  if (b) b.textContent = "Text";
+                };
+
                 // Close any other open transcripts
-                document.querySelectorAll("#results .transcriptWrap").forEach(w => {
-                  if (w !== transcriptWrap) w.style.display = "none";
+                document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
+                  if (w !== transcriptWrap) closeWrap(w);
                 });
 
-                const isOpen = transcriptWrap.style.display !== "none";
+                const isOpen = transcriptWrap.classList.contains("open");
                 if (isOpen) {
-                  transcriptWrap.style.display = "none";
-                  textBtn.textContent = "Text";
+                  closeWrap(transcriptWrap);
                   return;
                 }
 
-                transcriptWrap.style.display = "block";
+                // Open smoothly
+                transcriptWrap.classList.add("open");
+                transcriptWrap.style.opacity = "1";
+                transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
                 textBtn.textContent = "Hide";
 
                 // Lazy-load transcript once
@@ -581,6 +606,7 @@
                     const txt = await r.text();
                     transcriptBox.textContent = txt || "(empty)";
                     transcriptBox.dataset.loaded = "1";
+                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
                   } catch (err) {
                     transcriptBox.textContent = "Failed to load transcript.";
                   }
