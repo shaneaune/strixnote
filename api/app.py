@@ -482,3 +482,162 @@ def delete():
         return jsonify(response), 502
 
     return jsonify(response), 200
+# -----------------------------
+# Settings (persisted JSON)
+# -----------------------------
+
+SETTINGS_DIR = os.path.join(DATA_DIR, "config")
+SETTINGS_PATH = os.path.join(SETTINGS_DIR, "settings.json")
+
+DEFAULT_SETTINGS = {
+    "whisper": {
+        "language": "",       # "" = auto
+        "beam_size": 5,       # int
+        "vad_filter": False,  # bool
+    },
+    "meili": {
+        "typo_tolerance": True,  # bool
+        "synonyms": {},          # dict[str, list[str]]
+    },
+}
+
+
+def _deep_merge(base: dict, overlay: dict) -> dict:
+    out = dict(base or {})
+    for k, v in (overlay or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def load_settings() -> dict:
+    try:
+        if os.path.exists(SETTINGS_PATH):
+            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                data = f.read().strip()
+            if data:
+                import json
+                return json.loads(data)
+    except Exception as e:
+        print("Settings load error:", str(e), flush=True)
+    return {}
+
+
+def _coerce_bool(v, default=False) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ("1", "true", "yes", "on"):
+            return True
+        if s in ("0", "false", "no", "off"):
+            return False
+    return bool(v) if isinstance(v, (int, float)) else default
+
+
+def validate_settings(raw: dict) -> dict:
+    """
+    Returns a cleaned settings dict. Ignores unknown keys.
+    """
+    cleaned = _deep_merge({}, DEFAULT_SETTINGS)
+
+    raw = raw or {}
+    w = raw.get("whisper") or {}
+    m = raw.get("meili") or {}
+
+    # whisper.language: "" or "en" etc.
+    lang = w.get("language", "")
+    if lang is None:
+        lang = ""
+    if not isinstance(lang, str):
+        lang = str(lang)
+    lang = lang.strip()
+    cleaned["whisper"]["language"] = lang
+
+    # whisper.beam_size: int 1..10 (clamp)
+    bs = w.get("beam_size", DEFAULT_SETTINGS["whisper"]["beam_size"])
+    try:
+        bs = int(bs)
+    except Exception:
+        bs = DEFAULT_SETTINGS["whisper"]["beam_size"]
+    if bs < 1:
+        bs = 1
+    if bs > 10:
+        bs = 10
+    cleaned["whisper"]["beam_size"] = bs
+
+    # whisper.vad_filter: bool
+    cleaned["whisper"]["vad_filter"] = _coerce_bool(w.get("vad_filter", False), False)
+
+    # meili.typo_tolerance: bool
+    cleaned["meili"]["typo_tolerance"] = _coerce_bool(m.get("typo_tolerance", True), True)
+
+    # meili.synonyms: dict[str, list[str]]
+    syn = m.get("synonyms", {})
+    if syn is None:
+        syn = {}
+    if not isinstance(syn, dict):
+        syn = {}
+    syn_out = {}
+    for k, v in syn.items():
+        if not isinstance(k, str):
+            k = str(k)
+        k = k.strip()
+        if not k:
+            continue
+        if isinstance(v, str):
+            v = [v]
+        if isinstance(v, (list, tuple)):
+            vals = []
+            for item in v:
+                if item is None:
+                    continue
+                s = item if isinstance(item, str) else str(item)
+                s = s.strip()
+                if s and s not in vals:
+                    vals.append(s)
+            if vals:
+                syn_out[k] = vals
+    cleaned["meili"]["synonyms"] = syn_out
+
+    return cleaned
+
+
+def save_settings(settings: dict) -> None:
+    import json
+    os.makedirs(SETTINGS_DIR, exist_ok=True)
+    tmp = SETTINGS_PATH + ".tmp"
+    payload = json.dumps(settings, indent=2, sort_keys=True)
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(payload + "\n")
+    os.replace(tmp, SETTINGS_PATH)
+
+
+@app.get("/settings")
+def get_settings():
+    current = load_settings()
+    merged = _deep_merge(DEFAULT_SETTINGS, current)
+    merged = validate_settings(merged)
+    return jsonify({"ok": True, "settings": merged})
+
+
+@app.put("/settings")
+def put_settings():
+    body = request.get_json(silent=True)
+    if body is None:
+        return jsonify({"ok": False, "error": "invalid JSON"}), 400
+
+    # Accept either {"settings": {...}} or just {...}
+    raw = body.get("settings") if isinstance(body, dict) and "settings" in body else body
+    if not isinstance(raw, dict):
+        return jsonify({"ok": False, "error": "settings must be an object"}), 400
+
+    cleaned = validate_settings(raw)
+    try:
+        save_settings(cleaned)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"failed to save settings: {e}"}), 500
+
+    return jsonify({"ok": True, "settings": cleaned})

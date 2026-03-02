@@ -67,6 +67,7 @@
       <div class="tabs">
         <div class="tab active" id="tabSearch">Search</div>
         <div class="tab" id="tabBrowse">Browse</div>
+        <div class="tab" id="tabSettings">Settings</div>
       </div>
 
       <div id="searchWrap" style="display:flex; flex-direction:column; gap:10px;">
@@ -108,7 +109,51 @@
 
         </div>
       </div>
+      <div id="settingsWrap" class="panel" style="display:none; margin-top:10px;">
+        <div style="font-weight:600; margin-bottom:10px;">Settings</div>
 
+        <div class="row" style="gap:24px; align-items:flex-start; flex-wrap:wrap;">
+          <div style="min-width:320px; flex:1;">
+            <div style="font-weight:600; margin-bottom:6px;">Whisper</div>
+
+            <div class="small muted" style="margin-bottom:6px;">Language (blank = auto)</div>
+            <input id="setWhisperLanguage" placeholder="e.g. en"
+              style="width:240px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+
+            <div class="small muted" style="margin:10px 0 6px;">Beam size (1–10)</div>
+            <input id="setWhisperBeam" type="number" min="1" max="10"
+              style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+
+            <label class="small muted"
+              style="display:flex; gap:8px; align-items:center; margin-top:10px; cursor:pointer; user-select:none;">
+              <input id="setWhisperVad" type="checkbox">
+              VAD filter
+            </label>
+          </div>
+
+          <div style="min-width:360px; flex:1;">
+            <div style="font-weight:600; margin-bottom:6px;">MeiliSearch</div>
+
+            <label class="small muted"
+              style="display:flex; gap:8px; align-items:center; margin-bottom:10px; cursor:pointer; user-select:none;">
+              <input id="setMeiliTypo" type="checkbox">
+              Typo tolerance
+            </label>
+
+            <div class="small muted" style="margin-bottom:6px;">Synonyms (JSON object)</div>
+            <textarea id="setMeiliSynonyms" spellcheck="false"
+              style="width:100%; min-height:160px; padding:10px; box-sizing:border-box; border:1px solid #333; border-radius:8px; font-family:monospace; white-space:pre;"></textarea>
+            <div class="small muted" style="margin-top:6px;">
+              Example: {"tv":["television"],"gpu":["graphics card","video card"]}
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="gap:10px; margin-top:14px; align-items:center;">
+          <button id="settingsSaveBtn" class="btn btn-primary" type="button" style="height:38px;">Save</button>
+          <div id="settingsStatus" class="small muted"></div>
+        </div>
+      </div>
       <div class="panel">
         <div id="nowPlayingTitle">Player</div>
         <div id="nowPlayingMeta" style="color:#999;"></div>
@@ -143,6 +188,75 @@
         const presetToday = document.getElementById("presetToday");
         const preset7d = document.getElementById("preset7d");
         const preset30d = document.getElementById("preset30d");
+        const tabSettings = document.getElementById("tabSettings");
+        const settingsWrap = document.getElementById("settingsWrap");
+
+        const setWhisperLanguage = document.getElementById("setWhisperLanguage");
+        const setWhisperBeam = document.getElementById("setWhisperBeam");
+        const setWhisperVad = document.getElementById("setWhisperVad");
+
+        const setMeiliTypo = document.getElementById("setMeiliTypo");
+        const setMeiliSynonyms = document.getElementById("setMeiliSynonyms");
+
+        const settingsSaveBtn = document.getElementById("settingsSaveBtn");
+        const settingsStatus = document.getElementById("settingsStatus");
+
+        async function loadSettingsIntoForm() {
+          if (settingsStatus) settingsStatus.textContent = "Loading...";
+          const r = await fetch("/api/settings");
+          const data = await r.json();
+          if (!r.ok || !data.ok) throw new Error(data.error || r.statusText);
+
+          const s = data.settings || {};
+          const w = s.whisper || {};
+          const m = s.meili || {};
+
+          if (setWhisperLanguage) setWhisperLanguage.value = (w.language || "");
+          if (setWhisperBeam) setWhisperBeam.value = String(w.beam_size ?? 5);
+          if (setWhisperVad) setWhisperVad.checked = !!w.vad_filter;
+
+          if (setMeiliTypo) setMeiliTypo.checked = (m.typo_tolerance !== false);
+          if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify(m.synonyms || {}, null, 2);
+
+          if (settingsStatus) settingsStatus.textContent = "Loaded.";
+        }
+
+        async function saveSettingsFromForm() {
+          const language = (setWhisperLanguage?.value || "").trim();
+          const beamSizeRaw = (setWhisperBeam?.value || "").trim();
+          const vad = !!setWhisperVad?.checked;
+
+          let beam_size = 5;
+          if (beamSizeRaw) {
+            const n = parseInt(beamSizeRaw, 10);
+            if (!isNaN(n)) beam_size = n;
+          }
+
+          const typo_tolerance = !!setMeiliTypo?.checked;
+
+          let synonyms = {};
+          const synRaw = (setMeiliSynonyms?.value || "").trim();
+          if (synRaw) {
+            synonyms = JSON.parse(synRaw);
+          }
+
+          const payload = {
+            whisper: { language, beam_size, vad_filter: vad },
+            meili: { typo_tolerance, synonyms }
+          };
+
+          if (settingsStatus) settingsStatus.textContent = "Saving...";
+          const r = await fetch("/api/settings", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await r.json();
+          if (!r.ok || !data.ok) throw new Error(data.error || r.statusText);
+
+          if (settingsStatus) settingsStatus.textContent = "Saved.";
+          return data.settings;
+        }
 
         let mode = "search";
         let browseOffset = 0;
@@ -723,9 +837,13 @@
         document.getElementById("tabBrowse").onclick = async () => {
           mode = "browse";
           browseOffset = 0;
+
           document.getElementById("tabBrowse").classList.add("active");
           document.getElementById("tabSearch").classList.remove("active");
+          document.getElementById("tabSettings").classList.remove("active");
+
           document.getElementById("searchWrap").style.display = "none";
+          if (settingsWrap) settingsWrap.style.display = "none";
           document.getElementById("browsePager").style.display = "flex";
 
           const data = await meili(INDEX_FILES, {
@@ -877,75 +995,75 @@
               transcriptBox.textContent = out.join("\n") || "(empty)";
             };
 
-                          if (textBtn && transcriptWrap && transcriptBox) {
-                textBtn.onclick = async (e) => {
-                  e.stopPropagation();
+            if (textBtn && transcriptWrap && transcriptBox) {
+              textBtn.onclick = async (e) => {
+                e.stopPropagation();
 
-                  // Helper to close a row smoothly
-                  const closeWrap = (w) => {
-                    w.classList.remove("open");
-                    w.style.maxHeight = "0px";
-                    w.style.opacity = "0";
+                // Helper to close a row smoothly
+                const closeWrap = (w) => {
+                  w.classList.remove("open");
+                  w.style.maxHeight = "0px";
+                  w.style.opacity = "0";
 
-                    const b = w.closest(".result")?.querySelector(".btn-text");
-                    if (b) b.textContent = "Text";
+                  const b = w.closest(".result")?.querySelector(".btn-text");
+                  if (b) b.textContent = "Text";
 
-                    setTimeout(() => { w.style.display = "none"; }, 180);
-                  };
+                  setTimeout(() => { w.style.display = "none"; }, 180);
+                };
 
-                  // Close any other open transcripts
-                  document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
-                    if (w !== transcriptWrap) closeWrap(w);
-                  });
+                // Close any other open transcripts
+                document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
+                  if (w !== transcriptWrap) closeWrap(w);
+                });
 
-                  const isOpen = transcriptWrap.classList.contains("open");
-                  if (isOpen) {
-                    closeWrap(transcriptWrap);
-                    return;
-                  }
+                const isOpen = transcriptWrap.classList.contains("open");
+                if (isOpen) {
+                  closeWrap(transcriptWrap);
+                  return;
+                }
 
-                  // Open smoothly
-                  transcriptWrap.style.display = "block";
-                  transcriptWrap.classList.add("open");
-                  transcriptWrap.style.opacity = "0";
-                  transcriptWrap.style.maxHeight = "0px";
-                  textBtn.textContent = "Hide";
+                // Open smoothly
+                transcriptWrap.style.display = "block";
+                transcriptWrap.classList.add("open");
+                transcriptWrap.style.opacity = "0";
+                transcriptWrap.style.maxHeight = "0px";
+                textBtn.textContent = "Hide";
 
-                  requestAnimationFrame(() => {
-                    transcriptWrap.style.opacity = "1";
+                requestAnimationFrame(() => {
+                  transcriptWrap.style.opacity = "1";
+                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                });
+
+                // Lazy-load transcript once
+                if (!transcriptBox.dataset.loaded) {
+                  transcriptBox.textContent = "Loading...";
+                  try {
+                    await renderTranscript();
+                    transcriptBox.dataset.loaded = "1";
                     transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                  });
+                  } catch (err) {
+                    transcriptBox.textContent = "Failed to load transcript.";
+                  }
+                }
 
-                  // Lazy-load transcript once
-                  if (!transcriptBox.dataset.loaded) {
+                // If toggle exists, re-render when changed (while open)
+                if (tsToggle && !tsToggle.dataset.wired) {
+                  tsToggle.dataset.wired = "1";
+                  tsToggle.addEventListener("change", async (ev) => {
+                    ev.stopPropagation();
+                    if (!transcriptWrap.classList.contains("open")) return;
+
                     transcriptBox.textContent = "Loading...";
                     try {
                       await renderTranscript();
-                      transcriptBox.dataset.loaded = "1";
                       transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
                     } catch (err) {
                       transcriptBox.textContent = "Failed to load transcript.";
                     }
-                  }
-
-                  // If toggle exists, re-render when changed (while open)
-                  if (tsToggle && !tsToggle.dataset.wired) {
-                    tsToggle.dataset.wired = "1";
-                    tsToggle.addEventListener("change", async (ev) => {
-                      ev.stopPropagation();
-                      if (!transcriptWrap.classList.contains("open")) return;
-
-                      transcriptBox.textContent = "Loading...";
-                      try {
-                        await renderTranscript();
-                        transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                      } catch (err) {
-                        transcriptBox.textContent = "Failed to load transcript.";
-                      }
-                    });
-                  }
-                };
-              }
+                  });
+                }
+              };
+            }
           });
         };
 
@@ -955,7 +1073,10 @@
           mode = "search";
           document.getElementById("tabSearch").classList.add("active");
           document.getElementById("tabBrowse").classList.remove("active");
+          document.getElementById("tabSettings").classList.remove("active");
+
           document.getElementById("searchWrap").style.display = "block";
+          if (settingsWrap) settingsWrap.style.display = "none";
           document.getElementById("browsePager").style.display = "flex";
 
           // If we were already on Search, clicking the tab acts like "Search"
@@ -984,7 +1105,41 @@
             document.getElementById("nextPage").disabled = true;
           }
         };
+        if (tabSettings) {
+          tabSettings.onclick = async () => {
+            mode = "settings";
 
+            document.getElementById("tabSettings").classList.add("active");
+            document.getElementById("tabSearch").classList.remove("active");
+            document.getElementById("tabBrowse").classList.remove("active");
+
+            document.getElementById("searchWrap").style.display = "none";
+            if (settingsWrap) settingsWrap.style.display = "block";
+
+            // Hide list/pager UI while in settings
+            resultsDiv.innerHTML = "";
+            document.getElementById("browsePager").style.display = "none";
+            document.getElementById("pagerInfo").textContent = "";
+
+            try {
+              await loadSettingsIntoForm();
+            } catch (e) {
+              if (settingsStatus) settingsStatus.textContent = "Failed to load settings.";
+              alert("Failed to load settings: " + (e?.message || e));
+            }
+          };
+        }
+
+        if (settingsSaveBtn) {
+          settingsSaveBtn.onclick = async () => {
+            try {
+              await saveSettingsFromForm();
+            } catch (e) {
+              if (settingsStatus) settingsStatus.textContent = "Save failed.";
+              alert("Save failed: " + (e?.message || e));
+            }
+          };
+        }
         const uploadFiles = document.getElementById("uploadFiles");
         const chooseBtn = document.getElementById("chooseBtn");
         const chosenLabel = document.getElementById("chosenLabel");
@@ -1148,6 +1303,7 @@
         document.getElementById("uploadBtn")?.addEventListener("click", doUpload);
 
         document.getElementById("prevPage").onclick = async () => {
+          if (mode === "settings") return;
           if (mode === "browse") {
             browseOffset = Math.max(0, browseOffset - browseLimit);
             await document.getElementById("tabBrowse").onclick();
@@ -1158,6 +1314,7 @@
         };
 
         document.getElementById("nextPage").onclick = async () => {
+          if (mode === "settings") return;
           if (mode === "browse") {
             browseOffset += browseLimit;
             await document.getElementById("tabBrowse").onclick();
