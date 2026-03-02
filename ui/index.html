@@ -125,13 +125,18 @@
               style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
 
             <label class="small muted"
-              style="display:flex; gap:8px; align-items:center; margin-top:10px; cursor:pointer; user-select:none;">
-              <input id="setWhisperVad" type="checkbox">
-              VAD filter
+              style="display:flex; gap:8px; align-items:flex-start; margin-top:12px; cursor:pointer; user-select:none;">
+              <input id="setWhisperVad" type="checkbox" style="margin-top:3px;">
+              <div>
+                <div>VAD filter</div>
+                <div style="font-size:12px; opacity:0.8; margin-top:2px;">
+                  Removes silence before transcription. Faster, but may slightly affect timestamp alignment.
+                </div>
+              </div>
             </label>
           </div>
 
-          <div style="min-width:360px; flex:1;">
+          <div style="min-width:360px; flex:1; margin-top:24px;">
             <div style="font-weight:600; margin-bottom:6px;">MeiliSearch</div>
 
             <label class="small muted"
@@ -154,7 +159,7 @@
           <div id="settingsStatus" class="small muted"></div>
         </div>
       </div>
-      <div class="panel">
+      <div class="panel" id="playerPanel">
         <div id="nowPlayingTitle">Player</div>
         <div id="nowPlayingMeta" style="color:#999;"></div>
 
@@ -178,6 +183,7 @@
         const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
 
         const player = document.getElementById("player");
+        const playerPanel = document.getElementById("playerPanel");
         const captionBox = document.getElementById("captionBox");
         const resultsDiv = document.getElementById("results");
         const searchBox = document.getElementById("searchBox");
@@ -1115,6 +1121,7 @@
 
             document.getElementById("searchWrap").style.display = "none";
             if (settingsWrap) settingsWrap.style.display = "block";
+            if (playerPanel) playerPanel.style.display = "none";
 
             // Hide list/pager UI while in settings
             resultsDiv.innerHTML = "";
@@ -1332,7 +1339,6 @@
         style="color:inherit; text-decoration:none;" onmouseover="this.style.textDecoration='underline'"
         onmouseout="this.style.textDecoration='none'">
         shaneaune.com
-      </a>
       </a>
     </div>
 </body>

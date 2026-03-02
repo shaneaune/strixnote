@@ -29,9 +29,12 @@
   --color-text-disabled: rgba(21, 18, 36, 0.4);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   background: var(--color-bg);
@@ -134,6 +137,17 @@ input[type="search"],
   color: var(--color-text);
 }
 
+/* Settings panel inputs should be compact (override inline styles) */
+#settingsWrap input[type="text"],
+#settingsWrap input[type="number"],
+#settingsWrap select {
+  width: auto !important;
+  padding: 6px 8px !important;
+  font-size: 14px !important;
+  height: 34px !important;
+  min-width: 120px;
+}
+
 input::placeholder {
   color: var(--color-text-muted);
 }
@@ -156,13 +170,10 @@ input[type="file"] {
   color: var(--color-text);
 }
 
-input:focus {
-  outline: none;
-  background: var(--color-surface-elevated);
-}
 
 /* Buttons */
-button, .btn {
+button,
+.btn {
   padding: 10px 14px;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -172,7 +183,8 @@ button, .btn {
   color: var(--color-text);
 }
 
-button:hover, .btn:hover {
+button:hover,
+.btn:hover {
   border-color: rgba(91, 63, 214, 0.6);
 }
 
@@ -191,7 +203,8 @@ button:hover, .btn:hover {
   border-color: var(--color-primary);
 }
 
-button:disabled, .btn:disabled {
+button:disabled,
+.btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -210,9 +223,12 @@ button:disabled, .btn:disabled {
   border-color: rgba(91, 63, 214, 0.6);
 }
 
-.file { font-weight: 600; }
+.file {
+  font-weight: 600;
+}
 
-.dt, .time {
+.dt,
+.time {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   color: var(--color-text-muted);
 }
@@ -234,7 +250,10 @@ em {
 }
 
 /* Player */
-audio { width: 100%; margin-top: 10px; }
+audio {
+  width: 100%;
+  margin-top: 10px;
+}
 
 .captionBox {
   margin-top: 10px;
@@ -247,7 +266,8 @@ audio { width: 100%; margin-top: 10px; }
 }
 
 /* Pager */
-.pager, #browsePager {
+.pager,
+#browsePager {
   margin-top: 14px;
   display: flex;
   gap: 10px;
@@ -259,14 +279,14 @@ audio { width: 100%; margin-top: 10px; }
   height: 10px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .progress-bar {
   height: 100%;
   width: 0%;
   border-radius: 999px;
-  background: rgba(255,255,255,0.35);
+  background: rgba(255, 255, 255, 0.35);
   transition: width 150ms linear;
 }
 
@@ -276,8 +296,13 @@ audio { width: 100%; margin-top: 10px; }
 }
 
 @keyframes progress-pulse {
-  0%   { transform: translateX(-60%); }
-  100% { transform: translateX(140%); }
+  0% {
+    transform: translateX(-60%);
+  }
+
+  100% {
+    transform: translateX(140%);
+  }
 }
 
 /* Themed select (search mode dropdown) */
