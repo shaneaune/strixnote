@@ -1,10 +1,13 @@
-import os
-import time
-import shutil
-import requests
-import re
 import json
+import os
+import re
+import shutil
 import subprocess
+import time
+import signal
+import sys
+
+import requests
 from faster_whisper import WhisperModel
 
 IN_DIR = "/data/incoming"
@@ -24,6 +27,83 @@ COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE", "int8")
 
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".webm"}
 
+SETTINGS_PATH = "/data/config/settings.json"
+
+
+def load_runtime_settings() -> dict:
+    """
+    Load settings written by the Settings page.
+    Returns dict with defaults if file missing/bad.
+    """
+    defaults = {
+        "whisper": {"language": "", "beam_size": 5, "vad_filter": False},
+        "meili": {"typo_tolerance": True, "synonyms": {}},
+    }
+
+    try:
+        if not os.path.exists(SETTINGS_PATH):
+            return defaults
+
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f) or {}
+
+        w = data.get("whisper") or {}
+        m = data.get("meili") or {}
+
+        # Normalize / clamp
+        lang = str(w.get("language") or "").strip()
+        try:
+            beam = int(w.get("beam_size", 5))
+        except Exception:
+            beam = 5
+        beam = max(1, min(10, beam))
+
+        vad = bool(w.get("vad_filter", False))
+
+        # Keep meili in case we want it later in worker (not used yet)
+        tt = bool(m.get("typo_tolerance", True))
+        syn = m.get("synonyms") if isinstance(m.get("synonyms"), dict) else {}
+
+        return {
+            "whisper": {"language": lang, "beam_size": beam, "vad_filter": vad},
+            "meili": {"typo_tolerance": tt, "synonyms": syn},
+        }
+    except Exception as e:
+        print(f"Settings load failed, using defaults: {e}", flush=True)
+        return defaults
+
+def meili_request(method: str, path: str, json_body=None, timeout=10):
+    url = f"{MEILI_URL}{path}"
+    headers = {**meili_headers()}
+    if json_body is not None:
+        headers["Content-Type"] = "application/json"
+    return requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
+
+
+def ensure_meili_ready():
+    """
+    Verify Meili is reachable and required indexes exist.
+    Create indexes if missing (id primary key).
+    """
+    # Health
+    r = meili_request("GET", "/health", timeout=5)
+    r.raise_for_status()
+
+    # Ensure indexes exist
+    for uid in (FILE_INDEX_NAME, SEG_INDEX_NAME):
+        r = meili_request("GET", f"/indexes/{uid}", timeout=5)
+        if r.status_code == 404:
+            cr = meili_request(
+                "POST",
+                "/indexes",
+                json_body={"uid": uid, "primaryKey": "id"},
+                timeout=10,
+            )
+            # 200/202 ok; 409 if racing is fine
+            if cr.status_code not in (200, 202, 409):
+                cr.raise_for_status()
+        else:
+            r.raise_for_status()
 
 def meili_headers():
     return {"Authorization": f"Bearer {MEILI_MASTER_KEY}"} if MEILI_MASTER_KEY else {}
@@ -43,13 +123,15 @@ def is_stable(path: str, seconds: int = 5) -> bool:
 
 def probe_duration_seconds(path: str) -> float:
     try:
-        import subprocess
         result = subprocess.run(
             [
                 "ffprobe",
-                "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
                 path,
             ],
             stdout=subprocess.PIPE,
@@ -92,15 +174,28 @@ def write_vtt(segments, out_path):
         for seg in segments:
             f.write(f"{ts(seg.start)} --> {ts(seg.end)}\n{seg.text.strip()}\n\n")
 
+
 def format_txt_for_download(text: str) -> str:
     # Insert a newline after sentence-ending punctuation.
     # Avoid breaking decimal numbers like 3.14 by requiring a following space/end.
-    text = re.sub(r'(?<!\d)([.!?])(\s+)', r'\1\n', text)
+    text = re.sub(r"(?<!\d)([.!?])(\s+)", r"\1\n", text)
     # Also handle punctuation at end-of-string
-    text = re.sub(r'(?<!\d)([.!?])$', r'\1\n', text)
+    text = re.sub(r"(?<!\d)([.!?])$", r"\1\n", text)
     # Normalize: collapse excessive blank lines
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip() + "\n"
+
+_shutdown_requested = False
+
+
+def _handle_shutdown(signum, frame):
+    global _shutdown_requested
+    print("Shutdown signal received. Finishing current work...", flush=True)
+    _shutdown_requested = True
+
+
+signal.signal(signal.SIGTERM, _handle_shutdown)
+signal.signal(signal.SIGINT, _handle_shutdown)
 
 def main():
     os.makedirs(PROCESSING_DIR, exist_ok=True)
@@ -114,9 +209,20 @@ def main():
         compute_type=COMPUTE_TYPE,
         download_root=os.environ.get("WHISPER_MODEL_DIR", "/models"),
     )
-    print(f"Watching {IN_DIR} model={MODEL_NAME} device={DEVICE} compute={COMPUTE_TYPE}", flush=True)
 
-    while True:
+    try:
+        ensure_meili_ready()
+        print("Meili ready.", flush=True)
+    except Exception as e:
+        print(f"Meili not ready; refusing to start: {e}", flush=True)
+        return
+
+    print(
+        f"Watching {IN_DIR} model={MODEL_NAME} device={DEVICE} compute={COMPUTE_TYPE}",
+        flush=True,
+    )
+
+    while not _shutdown_requested:
         for name in sorted(os.listdir(IN_DIR)):
             path = os.path.join(IN_DIR, name)
 
@@ -143,13 +249,30 @@ def main():
             except FileNotFoundError:
                 continue
 
+            processing_path = None
             try:
                 processing_path = os.path.join(PROCESSING_DIR, name)
                 shutil.move(path, processing_path)
                 print(f"Transcribing: {name}", flush=True)
-                segments, _info = model.transcribe(processing_path, language="en", beam_size=5)
-                seg_list = list(segments)
 
+                s = load_runtime_settings().get("whisper") or {}
+                lang = (s.get("language") or "").strip()
+                beam = int(s.get("beam_size") or 5)
+                vad = bool(s.get("vad_filter", False))
+
+                transcribe_kwargs = {"beam_size": beam}
+                if lang:
+                    transcribe_kwargs["language"] = lang
+
+                # Some faster-whisper builds support vad_filter; if not, retry without it.
+                try:
+                    segments, _info = model.transcribe(
+                        processing_path, vad_filter=vad, **transcribe_kwargs
+                    )
+                except TypeError:
+                    segments, _info = model.transcribe(processing_path, **transcribe_kwargs)
+
+                seg_list = list(segments)
                 full_text = " ".join(s.text.strip() for s in seg_list).strip()
 
                 # Write TXT (human-readable lines)
@@ -161,7 +284,6 @@ def main():
                 write_vtt(seg_list, vtt_path)
 
                 now = int(time.time())
-
                 audio_bytes = os.path.getsize(processing_path)
                 duration_s = probe_duration_seconds(processing_path)
 
@@ -186,15 +308,17 @@ def main():
                 # ---- SEGMENT-LEVEL DOCUMENTS (new behavior) ----
                 segment_docs = []
                 for i, seg in enumerate(seg_list):
-                    segment_docs.append({
-                        "id": f"{safe_base}_{i:06d}",
-                        "filename": name,
-                        "start_ms": int(seg.start * 1000),
-                        "end_ms": int(seg.end * 1000),
-                        "text": seg.text.strip(),
-                        "created_at": now,
-                        "recorded_at": now  # will upgrade to parsed filename later
-                    })
+                    segment_docs.append(
+                        {
+                            "id": f"{safe_base}_{i:06d}",
+                            "filename": name,
+                            "start_ms": int(seg.start * 1000),
+                            "end_ms": int(seg.end * 1000),
+                            "text": seg.text.strip(),
+                            "created_at": now,
+                            "recorded_at": now,  # will upgrade to parsed filename later
+                        }
+                    )
 
                 if segment_docs:
                     requests.post(
@@ -204,21 +328,22 @@ def main():
                         timeout=60,
                     ).raise_for_status()
 
-
                 # Move original audio
                 shutil.move(processing_path, os.path.join(DONE_DIR, name))
+                processing_path = None
 
                 print(f"Done: {name}", flush=True)
 
             except Exception as e:
                 print(f"ERROR processing {name}: {e}", flush=True)
                 try:
-                    shutil.move(processing_path, os.path.join(DONE_DIR, name))
+                    if processing_path and os.path.exists(processing_path):
+                        shutil.move(processing_path, os.path.join(DONE_DIR, name))
                 except Exception:
                     pass
 
         time.sleep(2)
 
-
+print("Worker exiting cleanly.", flush=True)
 if __name__ == "__main__":
     main()
