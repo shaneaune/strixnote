@@ -184,6 +184,64 @@
           return `${yy}/${mm}/${dd}`;
         }
 
+        function vttTimeToSeconds(t) {
+          // "HH:MM:SS.mmm" or "MM:SS.mmm"
+          const parts = t.trim().split(":");
+          if (parts.length === 3) {
+            const h = parseInt(parts[0], 10) || 0;
+            const m = parseInt(parts[1], 10) || 0;
+            const s = parseFloat(parts[2]) || 0;
+            return h * 3600 + m * 60 + s;
+          }
+          if (parts.length === 2) {
+            const m = parseInt(parts[0], 10) || 0;
+            const s = parseFloat(parts[1]) || 0;
+            return m * 60 + s;
+          }
+          return 0;
+        }
+
+        function secondsToHMS(sec) {
+          const s = Math.max(0, Math.floor(sec));
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const r = s % 60;
+          return [h, m, r].map(v => String(v).padStart(2, "0")).join(":");
+        }
+
+        function vttToTimestampedText(vtt) {
+          // Returns lines like: "00:12:34  some text"
+          const lines = String(vtt || "").replace(/\r/g, "").split("\n");
+          const out = [];
+          let i = 0;
+
+          while (i < lines.length) {
+            const line = lines[i].trim();
+
+            // Time cue line: "00:00:01.000 --> 00:00:03.000 ..."
+            if (line.includes("-->")) {
+              const startStr = line.split("-->")[0].trim();
+              const startSec = vttTimeToSeconds(startStr);
+
+              // collect cue text lines until blank
+              i++;
+              const textLines = [];
+              while (i < lines.length && lines[i].trim() !== "") {
+                const t = lines[i].trim();
+                // skip VTT cue settings lines if any (rare here)
+                if (t && !t.startsWith("NOTE")) textLines.push(t);
+                i++;
+              }
+
+              const txt = textLines.join(" ").trim();
+              if (txt) out.push(`${secondsToHMS(startSec)}  ${txt}`);
+            } else {
+              i++;
+            }
+          }
+
+          return out.join("\n");
+        }
         async function meili(index, body) {
           const r = await fetch(`${MEILI}/search/${index}`, {
             method: "POST",
@@ -365,17 +423,23 @@
       </div>
     </div>
 
-    <div class="transcriptWrap" style="max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease; margin-top:10px;">
-      <div class="small muted" style="margin-bottom:6px;">Transcript</div>
-      <div class="transcriptBox"
-           style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
+          <div class="transcriptWrap" style="max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease; margin-top:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div class="small muted">Transcript</div>
+          <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+            <input type="checkbox" class="tsToggle">
+            Timestamps
+          </label>
+        </div>
+        <div class="transcriptBox"
+             style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
+        </div>
       </div>
-    </div>
   `;
 
               // click anywhere except buttons/links -> play
               div.onclick = (e) => {
-                if (e.target.closest("a") || e.target.closest("button")) return;
+                if (e.target.closest("a") || e.target.closest("button") || e.target.closest("input") || e.target.closest("label")) return;
                 loadFile(hit.filename, 0);
               };
 
@@ -420,6 +484,9 @@
 
                     const b = w.closest(".result")?.querySelector(".btn-text");
                     if (b) b.textContent = "Text";
+
+                    // actually hide after the collapse transition
+                    setTimeout(() => { w.style.display = "none"; }, 180);
                   };
 
                   // Close any other open transcripts
@@ -434,31 +501,98 @@
                   }
 
                   // Open smoothly
+                  transcriptWrap.style.display = "block";
                   transcriptWrap.classList.add("open");
-                  transcriptWrap.style.opacity = "1";
-                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                  transcriptWrap.style.opacity = "0";
+                  transcriptWrap.style.maxHeight = "0px";
                   textBtn.textContent = "Hide";
 
-                  // Lazy-load transcript once
-                  if (!transcriptBox.dataset.loaded) {
-                    transcriptBox.textContent = "Loading...";
-                    try {
-                      const fn = textBtn.getAttribute("data-fn") || hit.filename || "";
-                      const txtUrl = "/audio/" + encodeURIComponent(baseName(fn) + ".txt");
+                  // wait one frame so display:block applies, then measure/expand
+                  requestAnimationFrame(() => {
+                    transcriptWrap.style.opacity = "1";
+                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                  });
+
+                  // Find toggle (optional; Search HTML must include it)
+                  const tsToggle = div.querySelector(".tsToggle");
+
+                  // Render helper (txt or vtt->timestamped)
+                  const renderTranscript = async () => {
+                    const fn = textBtn.getAttribute("data-fn") || hit.filename || "";
+                    const base = baseName(fn);
+
+                    // No toggle -> default to plain txt
+                    const wantTs = !!(tsToggle && tsToggle.checked);
+
+                    if (!wantTs) {
+                      const txtUrl = "/audio/" + encodeURIComponent(base + ".txt");
                       const r = await fetch(txtUrl);
                       if (!r.ok) throw new Error(`HTTP ${r.status}`);
                       const txt = await r.text();
                       transcriptBox.textContent = txt || "(empty)";
-                      transcriptBox.dataset.loaded = "1";
-
-                      // Re-expand after content loads
-                      transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                    } catch (err) {
-                      transcriptBox.textContent = "Failed to load transcript.";
+                      return;
                     }
+
+                    const vttUrl = "/audio/" + encodeURIComponent(base + ".vtt");
+                    const r = await fetch(vttUrl);
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    const vtt = await r.text();
+
+                    // Minimal VTT -> timestamped text
+                    const lines = (vtt || "").replace(/\r/g, "").split("\n");
+                    const out = [];
+                    let i = 0;
+
+                    const cleanTs = (t) => (t || "").trim().split(".")[0]; // HH:MM:SS
+                    while (i < lines.length) {
+                      const line = lines[i].trim();
+                      i++;
+
+                      if (!line || line === "WEBVTT") continue;
+
+                      // cue time line
+                      if (line.includes("-->")) {
+                        const startTs = cleanTs(line.split("-->")[0]);
+                        const cueText = [];
+                        while (i < lines.length && lines[i].trim() !== "") {
+                          cueText.push(lines[i].trim());
+                          i++;
+                        }
+                        const text = cueText.join(" ").trim();
+                        if (text) out.push(`${startTs}  ${text}`);
+                      }
+                    }
+
+                    transcriptBox.textContent = out.join("\n") || "(empty)";
+                  };
+
+                  transcriptBox.textContent = "Loading...";
+                  try {
+                    await renderTranscript();
+                    transcriptBox.dataset.loaded = "1";
+                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                  } catch (err) {
+                    transcriptBox.textContent = "Failed to load transcript.";
                   }
-                };
-              }
+
+                  // If toggle exists, re-render when changed (while open)
+                  if (tsToggle && !tsToggle.dataset.wired) {
+                    tsToggle.dataset.wired = "1";
+                    tsToggle.addEventListener("change", async (ev) => {
+                      ev.stopPropagation();
+                      if (!transcriptWrap.classList.contains("open")) return;
+
+                      transcriptBox.textContent = "Loading...";
+                      try {
+                        await renderTranscript();
+                        transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                      } catch (err) {
+                        transcriptBox.textContent = "Failed to load transcript.";
+                      }
+                    });
+                  }
+                }; // end textBtn.onclick
+              } // end if (textBtn && transcriptWrap && transcriptBox)
             } else {
 
               div.innerHTML = `
@@ -650,17 +784,23 @@
 
       <div class="transcriptWrap"
      style="margin-top:10px; max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease;">
-        <div class="small muted" style="margin-bottom:6px;">Transcript</div>
-        <div class="transcriptBox"
-             style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
-        </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div class="small muted">Transcript</div>
+            <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+              <input type="checkbox" class="tsToggle">
+              Timestamps
+            </label>
+          </div>
+          <div class="transcriptBox"
+               style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
+          </div>
       </div>
   `;
 
             // click anywhere except delete → play
             div.onclick = (e) => {
               // If clicking a button or link, do not trigger playback
-              if (e.target.closest("a") || e.target.closest("button")) {
+              if (e.target.closest("a") || e.target.closest("button") || e.target.closest("input") || e.target.closest("label")) {
                 return;
               }
               loadFile(hit.filename, 0);
@@ -690,65 +830,122 @@
             const transcriptWrap = div.querySelector(".transcriptWrap");
             const transcriptBox = div.querySelector(".transcriptBox");
 
-            if (textBtn && transcriptWrap && transcriptBox) {
-              textBtn.onclick = async (e) => {
-                e.stopPropagation();
+            const tsToggle = div.querySelector(".tsToggle");
 
-                // Helper to close a row smoothly
-                const closeWrap = (w) => {
-                  w.classList.remove("open");
-                  w.style.maxHeight = "0px";
-                  w.style.opacity = "0";
+            const renderTranscript = async () => {
+              const fn = textBtn.getAttribute("data-fn") || "";
+              const base = baseName(fn);
+              const wantTs = !!(tsToggle && tsToggle.checked);
 
-                  const b = w.closest(".result")?.querySelector(".btn-text");
-                  if (b) b.textContent = "Text";
+              if (!wantTs) {
+                const txtUrl = "/audio/" + encodeURIComponent(base + ".txt");
+                const r = await fetch(txtUrl);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const txt = await r.text();
+                transcriptBox.textContent = txt || "(empty)";
+                return;
+              }
 
-                  // actually hide after the collapse transition
-                  setTimeout(() => { w.style.display = "none"; }, 180);
-                };
+              const vttUrl = "/audio/" + encodeURIComponent(base + ".vtt");
+              const r = await fetch(vttUrl);
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              const vtt = await r.text();
 
-                // Close any other open transcripts
-                document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
-                  if (w !== transcriptWrap) closeWrap(w);
-                });
+              const lines = (vtt || "").replace(/\r/g, "").split("\n");
+              const out = [];
+              let i = 0;
 
-                const isOpen = transcriptWrap.classList.contains("open");
-                if (isOpen) {
-                  closeWrap(transcriptWrap);
-                  return;
-                }
+              const cleanTs = (t) => (t || "").trim().split(".")[0];
+              while (i < lines.length) {
+                const line = lines[i].trim();
+                i++;
 
-                // Open smoothly
-                transcriptWrap.style.display = "block";
-                transcriptWrap.classList.add("open");
-                transcriptWrap.style.opacity = "0";
-                transcriptWrap.style.maxHeight = "0px";
-                textBtn.textContent = "Hide";
+                if (!line || line === "WEBVTT") continue;
 
-                // wait one frame so display:block applies, then measure/expand
-                requestAnimationFrame(() => {
-                  transcriptWrap.style.opacity = "1";
-                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                });
-
-                // Lazy-load transcript once
-                if (!transcriptBox.dataset.loaded) {
-                  transcriptBox.textContent = "Loading...";
-                  try {
-                    const fn = textBtn.getAttribute("data-fn") || "";
-                    const txtUrl = "/audio/" + encodeURIComponent(baseName(fn) + ".txt");
-                    const r = await fetch(txtUrl);
-                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                    const txt = await r.text();
-                    transcriptBox.textContent = txt || "(empty)";
-                    transcriptBox.dataset.loaded = "1";
-                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                  } catch (err) {
-                    transcriptBox.textContent = "Failed to load transcript.";
+                if (line.includes("-->")) {
+                  const startTs = cleanTs(line.split("-->")[0]);
+                  const cueText = [];
+                  while (i < lines.length && lines[i].trim() !== "") {
+                    cueText.push(lines[i].trim());
+                    i++;
                   }
+                  const text = cueText.join(" ").trim();
+                  if (text) out.push(`${startTs}  ${text}`);
                 }
-              };
-            }
+              }
+
+              transcriptBox.textContent = out.join("\n") || "(empty)";
+            };
+
+                          if (textBtn && transcriptWrap && transcriptBox) {
+                textBtn.onclick = async (e) => {
+                  e.stopPropagation();
+
+                  // Helper to close a row smoothly
+                  const closeWrap = (w) => {
+                    w.classList.remove("open");
+                    w.style.maxHeight = "0px";
+                    w.style.opacity = "0";
+
+                    const b = w.closest(".result")?.querySelector(".btn-text");
+                    if (b) b.textContent = "Text";
+
+                    setTimeout(() => { w.style.display = "none"; }, 180);
+                  };
+
+                  // Close any other open transcripts
+                  document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
+                    if (w !== transcriptWrap) closeWrap(w);
+                  });
+
+                  const isOpen = transcriptWrap.classList.contains("open");
+                  if (isOpen) {
+                    closeWrap(transcriptWrap);
+                    return;
+                  }
+
+                  // Open smoothly
+                  transcriptWrap.style.display = "block";
+                  transcriptWrap.classList.add("open");
+                  transcriptWrap.style.opacity = "0";
+                  transcriptWrap.style.maxHeight = "0px";
+                  textBtn.textContent = "Hide";
+
+                  requestAnimationFrame(() => {
+                    transcriptWrap.style.opacity = "1";
+                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                  });
+
+                  // Lazy-load transcript once
+                  if (!transcriptBox.dataset.loaded) {
+                    transcriptBox.textContent = "Loading...";
+                    try {
+                      await renderTranscript();
+                      transcriptBox.dataset.loaded = "1";
+                      transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                    } catch (err) {
+                      transcriptBox.textContent = "Failed to load transcript.";
+                    }
+                  }
+
+                  // If toggle exists, re-render when changed (while open)
+                  if (tsToggle && !tsToggle.dataset.wired) {
+                    tsToggle.dataset.wired = "1";
+                    tsToggle.addEventListener("change", async (ev) => {
+                      ev.stopPropagation();
+                      if (!transcriptWrap.classList.contains("open")) return;
+
+                      transcriptBox.textContent = "Loading...";
+                      try {
+                        await renderTranscript();
+                        transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                      } catch (err) {
+                        transcriptBox.textContent = "Failed to load transcript.";
+                      }
+                    });
+                  }
+                };
+              }
           });
         };
 
@@ -974,7 +1171,12 @@
 
     </div>
     <div class="small muted" style="margin:12px 0 6px; text-align:center; opacity:0.85;">
-      StrixNote • Wisdom that never leaves the nest. • shaneaune.com
+      StrixNote • Wisdom that never leaves the nest. • <a href="https://shaneaune.com" target="_blank" rel="noopener"
+        style="color:inherit; text-decoration:none;" onmouseover="this.style.textDecoration='underline'"
+        onmouseout="this.style.textDecoration='none'">
+        shaneaune.com
+      </a>
+      </a>
     </div>
 </body>
 
