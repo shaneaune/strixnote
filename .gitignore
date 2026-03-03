@@ -17,3 +17,4 @@ Thumbs.db
 # Whisper Models Directory
 whisper_models/ 
 api/__pycache__/
+__pycache__/
