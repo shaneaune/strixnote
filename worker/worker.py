@@ -270,12 +270,13 @@ def main():
             try:
                 processing_path = os.path.join(PROCESSING_DIR, name)
                 shutil.move(path, processing_path)
-                print(f"Transcribing: {name}", flush=True)
+                print(f"Transcribing: {name}", flush=True)                
 
-                s = load_runtime_settings().get("whisper") or {}
-                lang = (s.get("language") or "").strip()
-                beam = int(s.get("beam_size") or 5)
-                vad = bool(s.get("vad_filter", False))
+                ws = load_runtime_settings().get("whisper") or {}
+                lang = ws.get("language") or ""
+                beam = ws.get("beam_size") or 5
+                vad = bool(ws.get("vad_filter", False))
+                print(f"Whisper settings: language={(lang or 'auto')} beam_size={beam} vad_filter={vad}", flush=True)
 
                 transcribe_kwargs = {"beam_size": beam}
                 if lang:
