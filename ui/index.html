@@ -197,6 +197,32 @@
         const tabSettings = document.getElementById("tabSettings");
         const settingsWrap = document.getElementById("settingsWrap");
 
+        function setMode(nextMode) {
+          mode = nextMode;
+
+          if (nextMode === "settings") {
+            document.getElementById("searchWrap").style.display = "none";
+            if (settingsWrap) settingsWrap.style.display = "block";
+            if (playerPanel) playerPanel.style.display = "none";
+            document.getElementById("browsePager").style.display = "none";
+            return;
+          }
+
+          if (nextMode === "browse") {
+            document.getElementById("searchWrap").style.display = "none";
+            if (settingsWrap) settingsWrap.style.display = "none";
+            if (playerPanel) playerPanel.style.display = "block";
+            document.getElementById("browsePager").style.display = "flex";
+            return;
+          }
+
+          // "search"
+          document.getElementById("searchWrap").style.display = "block";
+          if (settingsWrap) settingsWrap.style.display = "none";
+          if (playerPanel) playerPanel.style.display = "block";
+          document.getElementById("browsePager").style.display = "flex";
+        }
+
         const setWhisperLanguage = document.getElementById("setWhisperLanguage");
         const setWhisperBeam = document.getElementById("setWhisperBeam");
         const setWhisperVad = document.getElementById("setWhisperVad");
@@ -841,16 +867,11 @@
         if (preset30d) preset30d.addEventListener("click", () => runPreset(30));
 
         document.getElementById("tabBrowse").onclick = async () => {
-          mode = "browse";
+          setMode("browse");
           browseOffset = 0;
-
           document.getElementById("tabBrowse").classList.add("active");
           document.getElementById("tabSearch").classList.remove("active");
-          document.getElementById("tabSettings").classList.remove("active");
-
-          document.getElementById("searchWrap").style.display = "none";
-          if (settingsWrap) settingsWrap.style.display = "none";
-          document.getElementById("browsePager").style.display = "flex";
+          document.getElementById("tabSettings")?.classList.remove("active");
 
           const data = await meili(INDEX_FILES, {
             q: "",
@@ -1076,14 +1097,10 @@
         document.getElementById("tabSearch").onclick = async () => {
           const wasSearch = (mode === "search");
 
-          mode = "search";
+          setMode("search");
           document.getElementById("tabSearch").classList.add("active");
           document.getElementById("tabBrowse").classList.remove("active");
-          document.getElementById("tabSettings").classList.remove("active");
-
-          document.getElementById("searchWrap").style.display = "block";
-          if (settingsWrap) settingsWrap.style.display = "none";
-          document.getElementById("browsePager").style.display = "flex";
+          document.getElementById("tabSettings")?.classList.remove("active");
 
           // If we were already on Search, clicking the tab acts like "Search"
           if (wasSearch) {
@@ -1121,6 +1138,7 @@
 
             document.getElementById("searchWrap").style.display = "none";
             if (settingsWrap) settingsWrap.style.display = "block";
+            if (playerPanel) playerPanel.style.display = "block";
             if (playerPanel) playerPanel.style.display = "none";
 
             // Hide list/pager UI while in settings
