@@ -29,6 +29,30 @@ AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", "
 
 SETTINGS_PATH = "/data/config/settings.json"
 
+MIN_FREE_BYTES = int(os.environ.get("MIN_FREE_GB", "1")) * 1024 * 1024 * 1024  # default 1 GiB
+
+
+def get_free_bytes(path: str) -> int:
+    # Uses the filesystem backing `path`
+    return shutil.disk_usage(path).free
+
+
+def wait_for_disk_space(path: str, min_free_bytes: int) -> bool:
+    """
+    Returns True if there is enough free space.
+    If not enough space, logs and returns False (caller should pause/continue).
+    """
+    free_b = get_free_bytes(path)
+    if free_b >= min_free_bytes:
+        return True
+
+    free_mb = free_b // (1024 * 1024)
+    need_mb = min_free_bytes // (1024 * 1024)
+    print(
+        f"Low disk space: {free_mb} MB free, need at least {need_mb} MB. Pausing new work.",
+        flush=True,
+    )
+    return False
 
 def load_runtime_settings() -> dict:
     """
@@ -71,6 +95,42 @@ def load_runtime_settings() -> dict:
     except Exception as e:
         print(f"Settings load failed, using defaults: {e}", flush=True)
         return defaults
+_LAST_SETTINGS_MTIME = None
+_LAST_SETTINGS_LOAD = 0.0
+_LAST_WHISPER_SETTINGS = {"language": "", "beam_size": 5, "vad_filter": False}
+_SETTINGS_CHECK_INTERVAL_S = 2.0
+
+
+def get_whisper_settings() -> dict:
+    """
+    Cached runtime Whisper settings.
+    Reloads settings.json only when it changes (mtime), with a small time-based throttle.
+    Applies to NEW files only (each file reads the latest cached value).
+    """
+    global _LAST_SETTINGS_MTIME, _LAST_SETTINGS_LOAD, _LAST_WHISPER_SETTINGS
+
+    now = time.time()
+    if now - _LAST_SETTINGS_LOAD < _SETTINGS_CHECK_INTERVAL_S:
+        return _LAST_WHISPER_SETTINGS
+
+    _LAST_SETTINGS_LOAD = now
+
+    try:
+        mtime = os.stat(SETTINGS_PATH).st_mtime
+    except FileNotFoundError:
+        _LAST_SETTINGS_MTIME = None
+        _LAST_WHISPER_SETTINGS = load_runtime_settings()["whisper"]
+        return _LAST_WHISPER_SETTINGS
+    except Exception:
+        # If stat fails for any reason, fall back to safe defaults loader
+        _LAST_WHISPER_SETTINGS = load_runtime_settings()["whisper"]
+        return _LAST_WHISPER_SETTINGS
+
+    if _LAST_SETTINGS_MTIME != mtime:
+        _LAST_SETTINGS_MTIME = mtime
+        _LAST_WHISPER_SETTINGS = load_runtime_settings()["whisper"]
+
+    return _LAST_WHISPER_SETTINGS
 
 def meili_request(method: str, path: str, json_body=None, timeout=10):
     url = f"{MEILI_URL}{path}"
@@ -268,15 +328,22 @@ def main():
 
             processing_path = None
             try:
+                # Disk space safeguard
+                if not wait_for_disk_space(OUT_DIR, MIN_FREE_BYTES):
+                    time.sleep(5)
+                    continue
                 processing_path = os.path.join(PROCESSING_DIR, name)
                 shutil.move(path, processing_path)
                 print(f"Transcribing: {name}", flush=True)                
 
-                ws = load_runtime_settings().get("whisper") or {}
-                lang = ws.get("language") or ""
-                beam = ws.get("beam_size") or 5
-                vad = bool(ws.get("vad_filter", False))
-                print(f"Whisper settings: language={(lang or 'auto')} beam_size={beam} vad_filter={vad}", flush=True)
+                ws = get_whisper_settings()
+                lang = ws["language"]
+                beam = ws["beam_size"]
+                vad = ws["vad_filter"]
+                print(
+                    f"Whisper settings: language={(lang or 'auto')} beam_size={beam} vad_filter={vad}",
+                    flush=True,
+                )
 
                 transcribe_kwargs = {"beam_size": beam}
                 if lang:
