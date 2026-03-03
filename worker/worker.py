@@ -109,6 +109,23 @@ def meili_headers():
     return {"Authorization": f"Bearer {MEILI_MASTER_KEY}"} if MEILI_MASTER_KEY else {}
 
 
+def meili_post_with_retry(path: str, json_body, timeout=30, retries=3):
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = meili_request("POST", path, json_body=json_body, timeout=timeout)
+            r.raise_for_status()
+            return
+        except Exception as e:
+            last_err = e
+            print(
+                f"Meili POST failed (attempt {attempt}/{retries}): {e}",
+                flush=True,
+            )
+            time.sleep(1.5 * attempt)
+
+    raise last_err
+
 def safe_id(s: str) -> str:
     # Meilisearch id must be only [A-Za-z0-9_-]
     return re.sub(r"[^A-Za-z0-9_-]+", "_", s).strip("_") or "doc"
@@ -298,12 +315,17 @@ def main():
                     "duration_s": duration_s,
                 }
 
-                requests.post(
-                    f"{MEILI_URL}/indexes/{FILE_INDEX_NAME}/documents",
-                    headers=meili_headers(),
-                    json=[file_doc],
-                    timeout=30,
-                ).raise_for_status()
+                meili_ok = True
+
+                try:
+                    meili_post_with_retry(
+                        f"/indexes/{FILE_INDEX_NAME}/documents",
+                        [file_doc],
+                        timeout=30,
+                    )
+                except Exception as e:
+                    meili_ok = False
+                    print(f"WARNING: Meili indexing failed (file doc). Continuing: {e}", flush=True)
 
                 # ---- SEGMENT-LEVEL DOCUMENTS (new behavior) ----
                 segment_docs = []
@@ -320,14 +342,18 @@ def main():
                         }
                     )
 
-                if segment_docs:
-                    requests.post(
-                        f"{MEILI_URL}/indexes/{SEG_INDEX_NAME}/documents",
-                        headers=meili_headers(),
-                        json=segment_docs,
-                        timeout=60,
-                    ).raise_for_status()
-
+                if segment_docs and meili_ok:
+                    try:
+                        meili_post_with_retry(
+                            f"/indexes/{SEG_INDEX_NAME}/documents",
+                            segment_docs,
+                            timeout=60,
+                        )
+                    except Exception as e:
+                        print(
+                            f"WARNING: Meili indexing failed (segment docs). Continuing: {e}",
+                            flush=True,
+                        )
                 # Move original audio
                 shutil.move(processing_path, os.path.join(DONE_DIR, name))
                 processing_path = None
