@@ -171,21 +171,36 @@ def meili_headers():
 
 def meili_post_with_retry(path: str, json_body, timeout=30, retries=3):
     last_err = None
+
     for attempt in range(1, retries + 1):
         try:
             r = meili_request("POST", path, json_body=json_body, timeout=timeout)
-            r.raise_for_status()
+
+            # If Meili returns an HTTP error, include status + body snippet for debugging.
+            if r.status_code >= 400:
+                body_snip = ""
+                try:
+                    body_snip = (r.text or "").strip().replace("\n", " ")[:300]
+                except Exception:
+                    body_snip = "<unable to read body>"
+
+                hint = ""
+                if r.status_code in (401, 403):
+                    hint = " (check MEILI_MASTER_KEY / auth)"
+
+                raise RuntimeError(f"HTTP {r.status_code}{hint}: {body_snip}")
+
             return
+
         except Exception as e:
             last_err = e
             print(
-                f"Meili POST failed (attempt {attempt}/{retries}): {e}",
+                f"Meili POST failed (attempt {attempt}/{retries}) path={path}: {e}",
                 flush=True,
             )
             time.sleep(1.5 * attempt)
 
     raise last_err
-
 def safe_id(s: str) -> str:
     # Meilisearch id must be only [A-Za-z0-9_-]
     return re.sub(r"[^A-Za-z0-9_-]+", "_", s).strip("_") or "doc"
