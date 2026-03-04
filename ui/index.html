@@ -171,6 +171,11 @@
 
       <div id="results"></div>
 
+      <div id="emptyState" class="small muted" style="display:none; padding:20px; text-align:center;">
+        No transcripts yet.<br>
+        Upload audio to begin.
+      </div>
+
       <div id="browsePager" class="pager" style="display:none;">
         <button id="prevPage">Prev</button>
         <span id="pagerInfo" style="padding:0 10px;"></span>
@@ -550,6 +555,12 @@
           const data = await meili(index, req);
 
           resultsDiv.innerHTML = "";
+
+          if (!data.hits || data.hits.length === 0) {
+            resultsDiv.innerHTML = `<div class="small muted" style="padding:12px 2px;">No results.</div>`;
+            return;
+          }
+
           (data.hits || []).forEach(hit => {
             const div = document.createElement("div");
             div.className = "result";
