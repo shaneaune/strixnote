@@ -256,6 +256,10 @@
         }
 
         async function saveSettingsFromForm() {
+
+          if (settingsSaveBtn) settingsSaveBtn.disabled = true;
+          if (settingsStatus) settingsStatus.textContent = "Saving…";
+
           const language = (setWhisperLanguage?.value || "").trim();
           const beamSizeRaw = (setWhisperBeam?.value || "").trim();
           const vad = !!setWhisperVad?.checked;
@@ -270,8 +274,13 @@
 
           let synonyms = {};
           const synRaw = (setMeiliSynonyms?.value || "").trim();
-          if (synRaw) {
-            synonyms = JSON.parse(synRaw);
+
+          try {
+            if (synRaw) synonyms = JSON.parse(synRaw);
+          } catch (e) {
+            if (settingsStatus) settingsStatus.textContent = "Invalid synonyms JSON.";
+            if (settingsSaveBtn) settingsSaveBtn.disabled = false;
+            throw new Error("Synonyms JSON is invalid");
           }
 
           const payload = {
@@ -279,7 +288,6 @@
             meili: { typo_tolerance, synonyms }
           };
 
-          if (settingsStatus) settingsStatus.textContent = "Saving...";
           const r = await fetch("/api/settings", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
