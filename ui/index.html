@@ -203,6 +203,8 @@
         const preset30d = document.getElementById("preset30d");
         const tabSettings = document.getElementById("tabSettings");
         const settingsWrap = document.getElementById("settingsWrap");
+        const nowPlayingTitle = document.getElementById("nowPlayingTitle");
+        const nowPlayingMeta = document.getElementById("nowPlayingMeta");
 
         function setMode(nextMode) {
           mode = nextMode;
@@ -220,6 +222,17 @@
             if (settingsWrap) settingsWrap.style.display = "none";
             if (playerPanel) playerPanel.style.display = "block";
             document.getElementById("browsePager").style.display = "flex";
+
+            // Reset Search tab mode when leaving it (Browse should default back to Files)
+            searchModeValue = "files";
+            if (searchMode) searchMode.value = "files";
+            try { localStorage.setItem(SEARCH_MODE_KEY, "files"); } catch (e) { }
+
+            // Reset date filter to default
+            if (dateField) dateField.value = "";
+            if (dateStart) dateStart.value = "";
+            if (dateEnd) dateEnd.value = "";
+
             return;
           }
 
@@ -498,6 +511,9 @@
           currentFile = filename;
           resetPlayer();
           refreshBrowseIfVisible();
+
+          if (nowPlayingTitle) nowPlayingTitle.textContent = filename || "Player";
+          if (nowPlayingMeta) nowPlayingMeta.textContent = "";
 
           const src = document.createElement("source");
           src.src = "/audio/" + encodeURIComponent(filename);
