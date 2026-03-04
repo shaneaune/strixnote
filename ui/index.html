@@ -569,7 +569,7 @@
               div.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <div>
-        <div class="file">${hit.filename}</div>
+        <div class="file">${hit.filename} <span class="procBadge small muted"></span></div>
         <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
@@ -987,6 +987,18 @@
 
 
             resultsDiv.appendChild(div);
+            // Check processing state
+            const badge = div.querySelector(".procBadge");
+            if (badge) {
+              fetch(`/api/status?filename=${encodeURIComponent(hit.filename)}`)
+                .then(r => r.json())
+                .then(s => {
+                  if (s.state === "processing" || s.state === "queued") {
+                    badge.textContent = "Processing…";
+                  }
+                })
+                .catch(() => { });
+            }
             div.querySelector(".btn-delete").onclick = async (e) => {
               e.stopPropagation();
               if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
