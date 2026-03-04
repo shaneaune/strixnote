@@ -207,6 +207,7 @@
         const nowPlayingMeta = document.getElementById("nowPlayingMeta");
 
         function setMode(nextMode) {
+          const prevMode = mode;
           mode = nextMode;
 
           if (nextMode === "settings") {
@@ -233,6 +234,14 @@
             if (dateStart) dateStart.value = "";
             if (dateEnd) dateEnd.value = "";
 
+            // Leaving Search -> clear the search box + query state
+            if (searchBox) searchBox.value = "";
+            searchQuery = "";
+
+            // Leaving Search -> clear the search box + query state
+            if (searchBox) searchBox.value = "";
+            searchQuery = "";
+
             return;
           }
 
@@ -241,6 +250,15 @@
           if (settingsWrap) settingsWrap.style.display = "none";
           if (playerPanel) playerPanel.style.display = "block";
           document.getElementById("browsePager").style.display = "flex";
+
+          // Entering Search: clear any Browse-rendered list so Search starts clean
+          resultsDiv.innerHTML = "";
+          document.getElementById("emptyState").style.display = "none";
+          // Hide/reset pager in Search mode
+          browseOffset = 0;
+          document.getElementById("browsePager").style.display = "none";
+          const pi = document.getElementById("pagerInfo");
+          if (pi) pi.textContent = "";
         }
 
         const setWhisperLanguage = document.getElementById("setWhisperLanguage");
@@ -1216,6 +1234,9 @@
         if (tabSettings) {
           tabSettings.onclick = async () => {
             mode = "settings";
+
+            if (searchBox) searchBox.value = "";
+            searchQuery = "";
 
             document.getElementById("tabSettings").classList.add("active");
             document.getElementById("tabSearch").classList.remove("active");
