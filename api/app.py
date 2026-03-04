@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 
 app = Flask(__name__)
 
@@ -292,6 +292,52 @@ def meili_search(index: str):
     except Exception as e:
         return jsonify({"error": f"meili proxy failed: {e}"}), 502
 
+@app.route(
+    "/meili/<path:subpath>",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+)
+def meili_proxy(subpath: str):
+    # Generic Meilisearch reverse-proxy so the browser never needs keys.
+    # Nginx routes /api/* -> this Flask app, so /api/meili/... becomes /meili/...
+    try:
+        url = f"{MEILI_URL}/{subpath}"
+
+        # Forward query string
+        if request.query_string:
+            url = f"{url}?{request.query_string.decode('utf-8', errors='ignore')}"
+
+        # Forward body (raw bytes so it works for JSON and non-JSON)
+        data = request.get_data()
+
+        # Forward only safe headers; always inject Authorization here
+        headers = {}
+        ct = request.headers.get("Content-Type")
+        if ct:
+            headers["Content-Type"] = ct
+
+        accept = request.headers.get("Accept")
+        if accept:
+            headers["Accept"] = accept
+
+        headers.update(meili_headers())
+
+        r = requests.request(
+            request.method,
+            url,
+            headers=headers,
+            data=data if data else None,
+            timeout=15,
+        )
+
+        # Pass through Meili response (status + content-type + body)
+        resp = Response(r.content, status=r.status_code)
+        resp.headers["Content-Type"] = r.headers.get(
+            "Content-Type", "application/json"
+        )
+        return resp
+
+    except Exception as e:
+        return jsonify({"error": f"meili proxy failed: {e}"}), 502
 
 @app.get("/status")
 def status():
