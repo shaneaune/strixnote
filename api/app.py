@@ -732,6 +732,45 @@ def save_settings(settings: dict) -> None:
         f.write(payload + "\n")
     os.replace(tmp, SETTINGS_PATH)
 
+def apply_meili_settings(meili_cfg: dict) -> dict:
+    """
+    Best-effort: apply Meili settings to both indexes.
+    Returns a summary dict; does not raise.
+    """
+    if not MEILI_MASTER_KEY:
+        return {"ok": False, "applied": False, "skipped": "MEILI_MASTER_KEY not set"}
+
+    meili_cfg = meili_cfg or {}
+    typo_enabled = bool(meili_cfg.get("typo_tolerance", True))
+    synonyms = meili_cfg.get("synonyms") if isinstance(meili_cfg.get("synonyms"), dict) else {}
+
+    payload = {
+        "typoTolerance": {"enabled": typo_enabled},
+        "synonyms": synonyms,
+    }
+
+    results = {}
+    applied_all = True
+
+    for idx in (INDEX_TRANSCRIPTS, INDEX_SEGMENTS):
+        try:
+            r = _meili_request("PATCH", f"/indexes/{idx}/settings", json_body=payload, timeout=10)
+            r.raise_for_status()
+            j = r.json() if r.content else {}
+            results[idx] = j
+
+            # If we got a task id, try to poll briefly so we can surface failures
+            task_uid = None
+            if isinstance(j, dict):
+                task_uid = j.get("taskUid") or j.get("uid")
+            if task_uid is not None:
+                results[f"{idx}_task"] = wait_meili_task(task_uid)
+
+        except Exception as e:
+            applied_all = False
+            results[idx] = {"error": str(e)}
+
+    return {"ok": applied_all, "applied": applied_all, "payload": payload, "results": results}
 
 @app.get("/settings")
 def get_settings():
@@ -757,5 +796,8 @@ def put_settings():
         save_settings(cleaned)
     except Exception as e:
         return jsonify({"ok": False, "error": f"failed to save settings: {e}"}), 500
+    
+    meili_apply = apply_meili_settings(cleaned.get("meili") or {})
+        
 
-    return jsonify({"ok": True, "settings": cleaned})
+    return jsonify({"ok": True, "settings": cleaned, "meili": meili_apply})
