@@ -429,6 +429,16 @@ def status():
         state = "queued"
     else:
         state = "missing"
+    # Disk space info (best-effort)
+    try:
+        incoming_free_b = get_free_bytes(INCOMING_DIR)
+    except Exception:
+        incoming_free_b = None
+
+    try:
+        processed_free_b = get_free_bytes(PROCESSED_DIR)
+    except Exception:
+        processed_free_b = None        
 
     return jsonify(
         {
@@ -436,6 +446,11 @@ def status():
             "state": state,
             "filename": filename,
             "base": base,
+            "disk": {
+                "incoming_free_bytes": incoming_free_b,
+                "processed_free_bytes": processed_free_b,
+                "min_free_bytes": MIN_FREE_BYTES,
+            },            
             "exists": {
                 "incoming": incoming_path.exists(),
                 "processing": processing_path.exists(),

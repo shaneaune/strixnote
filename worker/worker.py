@@ -169,7 +169,7 @@ def meili_headers():
     return {"Authorization": f"Bearer {MEILI_MASTER_KEY}"} if MEILI_MASTER_KEY else {}
 
 
-def meili_post_with_retry(path: str, json_body, timeout=30, retries=3):
+def meili_post_with_retry(path: str, json_body, timeout=30, retries=5):
     last_err = None
 
     for attempt in range(1, retries + 1):
@@ -198,9 +198,14 @@ def meili_post_with_retry(path: str, json_body, timeout=30, retries=3):
                 f"Meili POST failed (attempt {attempt}/{retries}) path={path}: {e}",
                 flush=True,
             )
-            time.sleep(1.5 * attempt)
 
+            # Exponential backoff, capped (1.0s, 2.0s, 4.0s, 8.0s, 10.0s...)
+            sleep_s = min(10.0, 1.0 * (2 ** (attempt - 1)))
+            time.sleep(sleep_s)
+
+    # After retries exhausted, raise so caller can handle (worker already catches and continues)
     raise last_err
+
 def safe_id(s: str) -> str:
     # Meilisearch id must be only [A-Za-z0-9_-]
     return re.sub(r"[^A-Za-z0-9_-]+", "_", s).strip("_") or "doc"
