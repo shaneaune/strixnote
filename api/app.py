@@ -615,10 +615,16 @@ def validate_settings(raw: dict) -> dict:
     cleaned["whisper"]["beam_size"] = bs
 
     # whisper.vad_filter: bool
-    cleaned["whisper"]["vad_filter"] = _coerce_bool(w.get("vad_filter", False), False)
+    cleaned["whisper"]["vad_filter"] = _coerce_bool(
+        w.get("vad_filter", DEFAULT_SETTINGS["whisper"]["vad_filter"]),
+        DEFAULT_SETTINGS["whisper"]["vad_filter"],
+    )
 
     # meili.typo_tolerance: bool
-    cleaned["meili"]["typo_tolerance"] = _coerce_bool(m.get("typo_tolerance", True), True)
+    cleaned["meili"]["typo_tolerance"] = _coerce_bool(
+        m.get("typo_tolerance", DEFAULT_SETTINGS["meili"]["typo_tolerance"]),
+        DEFAULT_SETTINGS["meili"]["typo_tolerance"],
+    )
 
     # meili.synonyms: dict[str, list[str]]
     syn = m.get("synonyms", {})
