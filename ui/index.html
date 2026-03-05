@@ -524,7 +524,15 @@
             captionBox.textContent = Array.from(cues).map(c => c.text).join("\n");
           });
         }
-
+        function escapeHtml(str) {
+          if (str == null) return "";
+          return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+        }
         function loadFile(filename, startMs = 0) {
           currentFile = filename;
           resetPlayer();
@@ -609,12 +617,23 @@
             cropLength: 60
           };
 
-          const data = await meili(index, req);
+          let data;
+          try {
+            data = await meili(index, req);
+          } catch (e) {
+            const msg = (e && e.message) ? e.message : String(e || "Search failed");
+            resultsDiv.innerHTML = `<div class="small muted" style="padding:12px 2px;">Search failed: ${escapeHtml(msg)}</div>`;
+            document.getElementById("browsePager").style.display = "none";
+            document.getElementById("pagerInfo").textContent = "";
+            return;
+          }
 
           resultsDiv.innerHTML = "";
 
           if (!data.hits || data.hits.length === 0) {
             resultsDiv.innerHTML = `<div class="small muted" style="padding:12px 2px;">No results.</div>`;
+            document.getElementById("browsePager").style.display = "none";
+            document.getElementById("pagerInfo").textContent = "";
             return;
           }
 
