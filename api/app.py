@@ -21,6 +21,21 @@ INDEX_SEGMENTS = os.environ.get("INDEX_SEGMENTS", "segments")
 
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".webm"}
 
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_GB", "2")) * 1024 * 1024 * 1024  # default 2 GiB
+MIN_FREE_BYTES = int(os.environ.get("MIN_FREE_GB", "1")) * 1024 * 1024 * 1024      # default 1 GiB
+
+
+def get_free_bytes(path: str) -> int:
+    return shutil.disk_usage(path).free
+
+
+def has_enough_disk(path: str, min_free_bytes: int) -> bool:
+    try:
+        return get_free_bytes(path) >= int(min_free_bytes)
+    except Exception:
+        # If we can't determine disk usage, fail closed (reject upload).
+        return False
+
 
 def meili_headers():
     return {"Authorization": f"Bearer {MEILI_MASTER_KEY}"} if MEILI_MASTER_KEY else {}
@@ -233,6 +248,28 @@ def health():
 def upload():
     os.makedirs(INCOMING_DIR, exist_ok=True)
 
+    # Disk space safeguard
+    if not has_enough_disk(INCOMING_DIR, MIN_FREE_BYTES):
+        free_b = get_free_bytes(INCOMING_DIR)
+        return jsonify(
+            {
+                "error": "server low disk space; upload refused",
+                "free_bytes": free_b,
+                "min_free_bytes": MIN_FREE_BYTES,
+            }
+        ), 507
+
+    # Request-size safeguard (best-effort; relies on client/NGINX sending Content-Length)
+    cl = request.content_length
+    if cl is not None and cl > MAX_UPLOAD_BYTES:
+        return jsonify(
+            {
+                "error": "request too large",
+                "content_length": cl,
+                "max_upload_bytes": MAX_UPLOAD_BYTES,
+            }
+        ), 413
+
     if "files" not in request.files:
         return jsonify({"error": "missing files field"}), 400
 
@@ -256,6 +293,22 @@ def upload():
             )
             continue
 
+        # File size safeguard
+        try:
+            f.stream.seek(0, os.SEEK_END)
+            size = f.stream.tell()
+            f.stream.seek(0)
+        except Exception:
+            size = None
+
+        if size is not None and size > MAX_UPLOAD_BYTES:
+            rejected.append(
+                {
+                    "filename": orig,
+                    "reason": f"file too large ({size} bytes > {MAX_UPLOAD_BYTES} bytes)",
+                }
+            )
+            continue
         dest = Path(INCOMING_DIR) / orig
 
         # Hard rule: do not overwrite existing files
@@ -265,7 +318,20 @@ def upload():
 
         # Stream to disk
         f.save(str(dest))
-        saved.append({"filename": orig, "bytes": dest.stat().st_size})
+
+        # Final size check (protect against missing Content-Length)
+        final_size = dest.stat().st_size
+        if final_size > MAX_UPLOAD_BYTES:
+            dest.unlink(missing_ok=True)
+            rejected.append(
+                {
+                    "filename": orig,
+                    "reason": f"file too large ({final_size} bytes > {MAX_UPLOAD_BYTES} bytes)",
+                }
+            )
+            continue
+
+        saved.append({"filename": orig, "bytes": final_size})
 
     return jsonify({"saved": saved, "rejected": rejected})
 
