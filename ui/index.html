@@ -898,21 +898,7 @@
         if (searchBtn) {
           searchBtn.addEventListener("click", async () => {
             const q = (searchBox?.value || "").trim();
-
-            searchQuery = q; // may be empty for date-only
-            searchOffset = 0;
-            setMode("search");
-
-            document.getElementById("tabSearch").classList.add("active");
-            document.getElementById("tabBrowse").classList.remove("active");
-            document.getElementById("tabSettings")?.classList.remove("active");
-
-            await performSearch();
-
-            // Reset date filter after executing search
-            if (dateField) dateField.value = "";
-            if (dateStart) dateStart.value = "";
-            if (dateEnd) dateEnd.value = "";
+            await runSearchFromUi(q);
           });
         }
 
