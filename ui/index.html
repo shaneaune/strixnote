@@ -1228,13 +1228,7 @@
 
             // Run search if we have a query OR a date selected (date-only search)
             if (q || hasDay) {
-              searchQuery = q; // may be empty for date-only
-              searchOffset = 0;
-              await performSearch();
-              // Reset date filter after executing search
-              if (dateField) dateField.value = "";
-              if (dateStart) dateStart.value = "";
-              if (dateEnd) dateEnd.value = "";
+              await runSearchFromUi(q);
               return;
             }
           }
