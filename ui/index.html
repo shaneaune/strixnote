@@ -205,7 +205,13 @@
         const settingsWrap = document.getElementById("settingsWrap");
         const nowPlayingTitle = document.getElementById("nowPlayingTitle");
         const nowPlayingMeta = document.getElementById("nowPlayingMeta");
-
+        const tabSearch = document.getElementById("tabSearch");
+        const tabBrowse = document.getElementById("tabBrowse");
+        const searchWrap = document.getElementById("searchWrap");
+        const browsePager = document.getElementById("browsePager");
+        const emptyState = document.getElementById("emptyState");
+        const pagerInfo = document.getElementById("pagerInfo");
+        
         function setActiveTab(tabName) {
           document.getElementById("tabSearch")?.classList.toggle("active", tabName === "search");
           document.getElementById("tabBrowse")?.classList.toggle("active", tabName === "browse");
