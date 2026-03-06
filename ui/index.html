@@ -890,19 +890,7 @@
           if (e.key !== "Enter") return;
 
           const q = e.target.value.trim();
-          searchQuery = q; // allow empty query when date filter is set
-
-          searchOffset = 0;
-          setMode("search");
-          document.getElementById("tabSearch").classList.add("active");
-          document.getElementById("tabBrowse").classList.remove("active");
-          document.getElementById("tabSettings")?.classList.remove("active");
-          await performSearch();
-
-          // Reset date filter after executing search
-          if (dateField) dateField.value = "";
-          if (dateStart) dateStart.value = "";
-          if (dateEnd) dateEnd.value = "";
+          await runSearchFromUi(q);
         });
 
         const searchBtn = document.getElementById("searchBtn");
