@@ -1003,6 +1003,14 @@
             total === 0 ? "No files" : `${start}-${end} of ${total}`;
 
           resultsDiv.innerHTML = "";
+
+          if (!data.hits || data.hits.length === 0) {
+            document.getElementById("emptyState").style.display = "block";
+            return;
+          } else {
+            document.getElementById("emptyState").style.display = "none";
+          }
+
           (data.hits || []).forEach(hit => {
             const div = document.createElement("div");
             div.className = "result";
@@ -1087,145 +1095,145 @@
                   }
                 })
                 .catch(() => { });
-        }
-        div.querySelector(".btn-delete").onclick = async (e) => {
-          e.stopPropagation();
-          if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
-
-          const resp = await fetch("/api/delete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: hit.filename })
-          });
-
-          const data = await resp.json();
-          if (!resp.ok) {
-            alert("Delete failed: " + (data.error || resp.statusText));
-            return;
-          }
-
-          div.remove();
-        };
-        const textBtn = div.querySelector(".btn-text");
-        const transcriptWrap = div.querySelector(".transcriptWrap");
-        const transcriptBox = div.querySelector(".transcriptBox");
-
-        const tsToggle = div.querySelector(".tsToggle");
-
-        const renderTranscript = async () => {
-          const fn = textBtn.getAttribute("data-fn") || "";
-          const base = baseName(fn);
-          const wantTs = !!(tsToggle && tsToggle.checked);
-
-          if (!wantTs) {
-            const txtUrl = "/audio/" + encodeURIComponent(base + ".txt");
-            const r = await fetch(txtUrl);
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            const txt = await r.text();
-            transcriptBox.textContent = txt || "(empty)";
-            return;
-          }
-
-          const vttUrl = "/audio/" + encodeURIComponent(base + ".vtt");
-          const r = await fetch(vttUrl);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const vtt = await r.text();
-
-          const lines = (vtt || "").replace(/\r/g, "").split("\n");
-          const out = [];
-          let i = 0;
-
-          const cleanTs = (t) => (t || "").trim().split(".")[0];
-          while (i < lines.length) {
-            const line = lines[i].trim();
-            i++;
-
-            if (!line || line === "WEBVTT") continue;
-
-            if (line.includes("-->")) {
-              const startTs = cleanTs(line.split("-->")[0]);
-              const cueText = [];
-              while (i < lines.length && lines[i].trim() !== "") {
-                cueText.push(lines[i].trim());
-                i++;
-              }
-              const text = cueText.join(" ").trim();
-              if (text) out.push(`${startTs}  ${text}`);
             }
-          }
+            div.querySelector(".btn-delete").onclick = async (e) => {
+              e.stopPropagation();
+              if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
 
-          transcriptBox.textContent = out.join("\n") || "(empty)";
-        };
+              const resp = await fetch("/api/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: hit.filename })
+              });
 
-        if (textBtn && transcriptWrap && transcriptBox) {
-          textBtn.onclick = async (e) => {
-            e.stopPropagation();
+              const data = await resp.json();
+              if (!resp.ok) {
+                alert("Delete failed: " + (data.error || resp.statusText));
+                return;
+              }
 
-            // Helper to close a row smoothly
-            const closeWrap = (w) => {
-              w.classList.remove("open");
-              w.style.maxHeight = "0px";
-              w.style.opacity = "0";
+              div.remove();
+            };
+            const textBtn = div.querySelector(".btn-text");
+            const transcriptWrap = div.querySelector(".transcriptWrap");
+            const transcriptBox = div.querySelector(".transcriptBox");
 
-              const b = w.closest(".result")?.querySelector(".btn-text");
-              if (b) b.textContent = "Text";
+            const tsToggle = div.querySelector(".tsToggle");
 
-              setTimeout(() => { w.style.display = "none"; }, 180);
+            const renderTranscript = async () => {
+              const fn = textBtn.getAttribute("data-fn") || "";
+              const base = baseName(fn);
+              const wantTs = !!(tsToggle && tsToggle.checked);
+
+              if (!wantTs) {
+                const txtUrl = "/audio/" + encodeURIComponent(base + ".txt");
+                const r = await fetch(txtUrl);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const txt = await r.text();
+                transcriptBox.textContent = txt || "(empty)";
+                return;
+              }
+
+              const vttUrl = "/audio/" + encodeURIComponent(base + ".vtt");
+              const r = await fetch(vttUrl);
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              const vtt = await r.text();
+
+              const lines = (vtt || "").replace(/\r/g, "").split("\n");
+              const out = [];
+              let i = 0;
+
+              const cleanTs = (t) => (t || "").trim().split(".")[0];
+              while (i < lines.length) {
+                const line = lines[i].trim();
+                i++;
+
+                if (!line || line === "WEBVTT") continue;
+
+                if (line.includes("-->")) {
+                  const startTs = cleanTs(line.split("-->")[0]);
+                  const cueText = [];
+                  while (i < lines.length && lines[i].trim() !== "") {
+                    cueText.push(lines[i].trim());
+                    i++;
+                  }
+                  const text = cueText.join(" ").trim();
+                  if (text) out.push(`${startTs}  ${text}`);
+                }
+              }
+
+              transcriptBox.textContent = out.join("\n") || "(empty)";
             };
 
-            // Close any other open transcripts
-            document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
-              if (w !== transcriptWrap) closeWrap(w);
-            });
+            if (textBtn && transcriptWrap && transcriptBox) {
+              textBtn.onclick = async (e) => {
+                e.stopPropagation();
 
-            const isOpen = transcriptWrap.classList.contains("open");
-            if (isOpen) {
-              closeWrap(transcriptWrap);
-              return;
-            }
+                // Helper to close a row smoothly
+                const closeWrap = (w) => {
+                  w.classList.remove("open");
+                  w.style.maxHeight = "0px";
+                  w.style.opacity = "0";
 
-            // Open smoothly
-            transcriptWrap.style.display = "block";
-            transcriptWrap.classList.add("open");
-            transcriptWrap.style.opacity = "0";
-            transcriptWrap.style.maxHeight = "0px";
-            textBtn.textContent = "Hide";
+                  const b = w.closest(".result")?.querySelector(".btn-text");
+                  if (b) b.textContent = "Text";
 
-            requestAnimationFrame(() => {
-              transcriptWrap.style.opacity = "1";
-              transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-            });
+                  setTimeout(() => { w.style.display = "none"; }, 180);
+                };
 
-            // Lazy-load transcript once
-            if (!transcriptBox.dataset.loaded) {
-              transcriptBox.textContent = "Loading...";
-              try {
-                await renderTranscript();
-                transcriptBox.dataset.loaded = "1";
-                transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-              } catch (err) {
-                transcriptBox.textContent = "Failed to load transcript.";
-              }
-            }
+                // Close any other open transcripts
+                document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
+                  if (w !== transcriptWrap) closeWrap(w);
+                });
 
-            // If toggle exists, re-render when changed (while open)
-            if (tsToggle && !tsToggle.dataset.wired) {
-              tsToggle.dataset.wired = "1";
-              tsToggle.addEventListener("change", async (ev) => {
-                ev.stopPropagation();
-                if (!transcriptWrap.classList.contains("open")) return;
-
-                transcriptBox.textContent = "Loading...";
-                try {
-                  await renderTranscript();
-                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                } catch (err) {
-                  transcriptBox.textContent = "Failed to load transcript.";
+                const isOpen = transcriptWrap.classList.contains("open");
+                if (isOpen) {
+                  closeWrap(transcriptWrap);
+                  return;
                 }
-              });
+
+                // Open smoothly
+                transcriptWrap.style.display = "block";
+                transcriptWrap.classList.add("open");
+                transcriptWrap.style.opacity = "0";
+                transcriptWrap.style.maxHeight = "0px";
+                textBtn.textContent = "Hide";
+
+                requestAnimationFrame(() => {
+                  transcriptWrap.style.opacity = "1";
+                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                });
+
+                // Lazy-load transcript once
+                if (!transcriptBox.dataset.loaded) {
+                  transcriptBox.textContent = "Loading...";
+                  try {
+                    await renderTranscript();
+                    transcriptBox.dataset.loaded = "1";
+                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                  } catch (err) {
+                    transcriptBox.textContent = "Failed to load transcript.";
+                  }
+                }
+
+                // If toggle exists, re-render when changed (while open)
+                if (tsToggle && !tsToggle.dataset.wired) {
+                  tsToggle.dataset.wired = "1";
+                  tsToggle.addEventListener("change", async (ev) => {
+                    ev.stopPropagation();
+                    if (!transcriptWrap.classList.contains("open")) return;
+
+                    transcriptBox.textContent = "Loading...";
+                    try {
+                      await renderTranscript();
+                      transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                    } catch (err) {
+                      transcriptBox.textContent = "Failed to load transcript.";
+                    }
+                  });
+                }
+              };
             }
-          };
-        }
           });
         };
 
@@ -1258,6 +1266,7 @@
           // If switching into Search mode, don't clear results if a query already exists.
           if (!searchQuery) {
             resultsDiv.innerHTML = "";
+            document.getElementById("emptyState").style.display = "none";
             document.getElementById("pagerInfo").textContent = "No results";
             document.getElementById("prevPage").disabled = true;
             document.getElementById("nextPage").disabled = true;
