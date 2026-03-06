@@ -958,9 +958,7 @@
         document.getElementById("tabBrowse").onclick = async () => {
           setMode("browse");
 
-          document.getElementById("tabBrowse").classList.add("active");
-          document.getElementById("tabSearch").classList.remove("active");
-          document.getElementById("tabSettings")?.classList.remove("active");
+          setActiveTab("browse");
 
           const data = await meili(INDEX_FILES, {
             q: "",
