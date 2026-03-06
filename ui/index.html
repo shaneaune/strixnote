@@ -1242,9 +1242,7 @@
             if (searchBox) searchBox.value = "";
             searchQuery = "";
 
-            document.getElementById("tabSettings").classList.add("active");
-            document.getElementById("tabSearch").classList.remove("active");
-            document.getElementById("tabBrowse").classList.remove("active");
+            setActiveTab("settings");
 
             // Hide list/pager UI while in settings
             resultsDiv.innerHTML = "";
