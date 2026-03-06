@@ -957,18 +957,11 @@
           document.getElementById("tabSettings")?.classList.remove("active");
 
           // Clear Browse results when entering Search tab; Search should be blank until you search.
-          resultsDiv.innerHTML = "";
-          document.getElementById("browsePager").style.display = "none";
           document.getElementById("pagerInfo").textContent = "";
           document.getElementById("prevPage").disabled = true;
           document.getElementById("nextPage").disabled = true;
 
           await performSearch();
-
-          // Clear date fields after executing search (consistent behavior)
-          if (dateField) dateField.value = "";
-          if (dateStart) dateStart.value = "";
-          if (dateEnd) dateEnd.value = "";
         }
 
         if (presetToday) presetToday.addEventListener("click", () => runPreset(1));
