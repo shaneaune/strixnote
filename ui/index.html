@@ -206,6 +206,12 @@
         const nowPlayingTitle = document.getElementById("nowPlayingTitle");
         const nowPlayingMeta = document.getElementById("nowPlayingMeta");
 
+        function setActiveTab(tabName) {
+          document.getElementById("tabSearch")?.classList.toggle("active", tabName === "search");
+          document.getElementById("tabBrowse")?.classList.toggle("active", tabName === "browse");
+          document.getElementById("tabSettings")?.classList.toggle("active", tabName === "settings");
+        }
+
         function setMode(nextMode) {
           const prevMode = mode;
           mode = nextMode;
