@@ -222,7 +222,7 @@
           mode = nextMode;
 
           if (nextMode === "settings") {
-            document.getElementById("searchWrap").style.display = "none";
+            searchWrap.style.display = "none";
             if (settingsWrap) settingsWrap.style.display = "block";
             if (playerPanel) playerPanel.style.display = "none";
             browsePager.style.display = "none";
@@ -230,7 +230,7 @@
           }
 
           if (nextMode === "browse") {
-            document.getElementById("searchWrap").style.display = "none";
+            searchWrap.style.display = "none";
             if (settingsWrap) settingsWrap.style.display = "none";
             if (playerPanel) playerPanel.style.display = "block";
             document.getElementById("browsePager").style.display = "flex";
