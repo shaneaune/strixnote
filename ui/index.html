@@ -871,7 +871,21 @@
           document.getElementById("prevPage").disabled = (searchOffset === 0);
           document.getElementById("nextPage").disabled = !data.hits || data.hits.length < browseLimit;
         }
+        async function runSearchFromUi(query) {
+          searchQuery = query; // may be empty for date-only
+          searchOffset = 0;
+          setMode("search");
+          document.getElementById("tabSearch").classList.add("active");
+          document.getElementById("tabBrowse").classList.remove("active");
+          document.getElementById("tabSettings")?.classList.remove("active");
 
+          await performSearch();
+
+          // Reset date filter after executing search
+          if (dateField) dateField.value = "";
+          if (dateStart) dateStart.value = "";
+          if (dateEnd) dateEnd.value = "";
+        }
         searchBox.addEventListener("keypress", async e => {
           if (e.key !== "Enter") return;
 
@@ -1271,7 +1285,7 @@
 
             // Hide list/pager UI while in settings
             resultsDiv.innerHTML = "";
-            
+
             try {
               await loadSettingsIntoForm();
             } catch (e) {
