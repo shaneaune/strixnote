@@ -941,19 +941,8 @@
           if (dateStart) dateStart.value = ymdLocal(start);
           if (dateEnd) dateEnd.value = ymdLocal(today);
 
-          searchQuery = (searchBox?.value || "").trim(); // allow optional term
-          searchOffset = 0;
-          setMode("search");
-          document.getElementById("tabSearch").classList.add("active");
-          document.getElementById("tabBrowse").classList.remove("active");
-          document.getElementById("tabSettings")?.classList.remove("active");
-
-          // Clear Browse results when entering Search tab; Search should be blank until you search.
-          document.getElementById("pagerInfo").textContent = "";
-          document.getElementById("prevPage").disabled = true;
-          document.getElementById("nextPage").disabled = true;
-
-          await performSearch();
+          const q = (searchBox?.value || "").trim();
+          await runSearchFromUi(q, { clearDates: false });
         }
 
         if (presetToday) presetToday.addEventListener("click", () => runPreset(1));
