@@ -859,6 +859,8 @@
             resultsDiv.appendChild(div);
           });
 
+          document.getElementById("browsePager").style.display = "flex";
+
           // Pager + count
           const total = data.estimatedTotalHits ?? 0;
           const start = total === 0 ? 0 : searchOffset + 1;
@@ -898,7 +900,7 @@
             searchQuery = q; // may be empty for date-only
             searchOffset = 0;
             setMode("search");
-            
+
             document.getElementById("tabSearch").classList.add("active");
             document.getElementById("tabBrowse").classList.remove("active");
             document.getElementById("tabSettings")?.classList.remove("active");
@@ -949,12 +951,11 @@
 
           searchQuery = (searchBox?.value || "").trim(); // allow optional term
           searchOffset = 0;
-          mode = "search";
-
+          setMode("search");
           document.getElementById("tabSearch").classList.add("active");
           document.getElementById("tabBrowse").classList.remove("active");
-          document.getElementById("searchWrap").style.display = "block";
-          document.getElementById("browsePager").style.display = "flex";
+          document.getElementById("tabSettings")?.classList.remove("active");
+
           // Clear Browse results when entering Search tab; Search should be blank until you search.
           resultsDiv.innerHTML = "";
           document.getElementById("browsePager").style.display = "none";
@@ -976,7 +977,7 @@
 
         document.getElementById("tabBrowse").onclick = async () => {
           setMode("browse");
-          browseOffset = 0;
+
           document.getElementById("tabBrowse").classList.add("active");
           document.getElementById("tabSearch").classList.remove("active");
           document.getElementById("tabSettings")?.classList.remove("active");
@@ -1227,6 +1228,8 @@
               };
             }
           });
+          document.getElementById("prevPage").disabled = (browseOffset === 0);
+          document.getElementById("nextPage").disabled = !data.hits || data.hits.length < browseLimit;
         };
 
         document.getElementById("tabSearch").onclick = async () => {
