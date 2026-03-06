@@ -897,12 +897,11 @@
 
             searchQuery = q; // may be empty for date-only
             searchOffset = 0;
-            mode = "search";
-
+            setMode("search");
+            
             document.getElementById("tabSearch").classList.add("active");
             document.getElementById("tabBrowse").classList.remove("active");
-            document.getElementById("searchWrap").style.display = "block";
-            document.getElementById("browsePager").style.display = "flex";
+            document.getElementById("tabSettings")?.classList.remove("active");
 
             await performSearch();
 
