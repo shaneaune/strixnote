@@ -1271,8 +1271,7 @@
 
             // Hide list/pager UI while in settings
             resultsDiv.innerHTML = "";
-            document.getElementById("pagerInfo").textContent = "";
-
+            
             try {
               await loadSettingsIntoForm();
             } catch (e) {
