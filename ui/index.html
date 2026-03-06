@@ -1260,8 +1260,6 @@
 
           // If switching into Search mode, don't clear results if a query already exists.
           if (!searchQuery) {
-            resultsDiv.innerHTML = "";
-            document.getElementById("emptyState").style.display = "none";
             document.getElementById("pagerInfo").textContent = "No results";
             document.getElementById("prevPage").disabled = true;
             document.getElementById("nextPage").disabled = true;
