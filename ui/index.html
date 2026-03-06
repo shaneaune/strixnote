@@ -871,7 +871,9 @@
           document.getElementById("prevPage").disabled = (searchOffset === 0);
           document.getElementById("nextPage").disabled = !data.hits || data.hits.length < browseLimit;
         }
-        async function runSearchFromUi(query) {
+        async function runSearchFromUi(query, options = {}) {
+          const { clearDates = true } = options;
+
           searchQuery = query; // may be empty for date-only
           searchOffset = 0;
           setMode("search");
@@ -881,10 +883,12 @@
 
           await performSearch();
 
-          // Reset date filter after executing search
-          if (dateField) dateField.value = "";
-          if (dateStart) dateStart.value = "";
-          if (dateEnd) dateEnd.value = "";
+          if (clearDates) {
+            // Reset date filter after executing search
+            if (dateField) dateField.value = "";
+            if (dateStart) dateStart.value = "";
+            if (dateEnd) dateEnd.value = "";
+          }
         }
         searchBox.addEventListener("keypress", async e => {
           if (e.key !== "Enter") return;
