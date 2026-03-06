@@ -1214,9 +1214,7 @@
           const wasSearch = (mode === "search");
 
           setMode("search");
-          document.getElementById("tabSearch").classList.add("active");
-          document.getElementById("tabBrowse").classList.remove("active");
-          document.getElementById("tabSettings")?.classList.remove("active");
+          setActiveTab("search");
 
           // If we were already on Search, clicking the tab acts like "Search"
           if (wasSearch) {
