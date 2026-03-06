@@ -211,6 +211,8 @@
         const browsePager = document.getElementById("browsePager");
         const emptyState = document.getElementById("emptyState");
         const pagerInfo = document.getElementById("pagerInfo");
+        const prevPage = document.getElementById("prevPage");
+        const nextPage = document.getElementById("nextPage");
 
         function setActiveTab(tabName) {
           tabSearch?.classList.toggle("active", tabName === "search");
@@ -223,16 +225,16 @@
 
           if (nextMode === "settings") {
             searchWrap.style.display = "none";
-            if (settingsWrap) settingsWrap.style.display = "block";
-            if (playerPanel) playerPanel.style.display = "none";
+            settingsWrap.style.display = "block";
+            playerPanel.style.display = "none";
             browsePager.style.display = "none";
             return;
           }
 
           if (nextMode === "browse") {
             searchWrap.style.display = "none";
-            if (settingsWrap) settingsWrap.style.display = "none";
-            if (playerPanel) playerPanel.style.display = "block";
+            settingsWrap.style.display = "none";
+            playerPanel.style.display = "block";
             browsePager.style.display = "flex";
 
             // Reset Search tab mode when leaving it (Browse should default back to Files)
@@ -254,12 +256,12 @@
 
           // "search"
           document.getElementById("searchWrap").style.display = "block";
-          if (settingsWrap) settingsWrap.style.display = "none";
-          if (playerPanel) playerPanel.style.display = "block";
+          settingsWrap.style.display = "none";
+          playerPanel.style.display = "block";
 
           // Entering Search: clear any Browse-rendered list so Search starts clean
           resultsDiv.innerHTML = "";
-          document.getElementById("emptyState").style.display = "none";
+          emptyState.style.display = "none";
 
           // Hide/reset pager in Search mode
           browseOffset = 0;
@@ -571,7 +573,7 @@
 
         function refreshBrowseIfVisible() {
           if (mode === "browse") {
-            document.getElementById("tabBrowse").click();
+            tabBrowse.click();
           }
         }
 
@@ -630,8 +632,8 @@
           } catch (e) {
             const msg = (e && e.message) ? e.message : String(e || "Search failed");
             resultsDiv.innerHTML = `<div class="small muted" style="padding:12px 2px;">Search failed: ${escapeHtml(msg)}</div>`;
-            document.getElementById("browsePager").style.display = "none";
-            document.getElementById("pagerInfo").textContent = "";
+            browsePager.style.display = "none";
+            pagerInfo.textContent = "";
             return;
           }
 
@@ -639,8 +641,8 @@
 
           if (!data.hits || data.hits.length === 0) {
             resultsDiv.innerHTML = `<div class="small muted" style="padding:12px 2px;">No results.</div>`;
-            document.getElementById("browsePager").style.display = "none";
-            document.getElementById("pagerInfo").textContent = "";
+            browsePager.style.display = "none";
+            pagerInfo.textContent = "";
             return;
           }
 
@@ -870,17 +872,17 @@
             resultsDiv.appendChild(div);
           });
 
-          document.getElementById("browsePager").style.display = "flex";
+          browsePager.style.display = "flex";
 
           // Pager + count
           const total = data.estimatedTotalHits ?? 0;
           const start = total === 0 ? 0 : searchOffset + 1;
           const end = Math.min(searchOffset + (data.hits?.length || 0), total);
-          document.getElementById("pagerInfo").textContent =
+          pagerInfo.textContent =
             total === 0 ? "No results" : `${start}-${end} of ${total}`;
 
-          document.getElementById("prevPage").disabled = (searchOffset === 0);
-          document.getElementById("nextPage").disabled = !data.hits || data.hits.length < browseLimit;
+          prevPage.disabled = (searchOffset === 0);
+          nextPage.disabled = !data.hits || data.hits.length < browseLimit;
         }
         async function runSearchFromUi(query, options = {}) {
           const { clearDates = true } = options;
@@ -888,9 +890,9 @@
           searchQuery = query; // may be empty for date-only
           searchOffset = 0;
           setMode("search");
-          document.getElementById("tabSearch").classList.add("active");
-          document.getElementById("tabBrowse").classList.remove("active");
-          document.getElementById("tabSettings")?.classList.remove("active");
+          tabSearch.classList.add("active");
+          tabBrowse.classList.remove("active");
+          tabSettings?.classList.remove("active");
 
           await performSearch();
 
@@ -930,9 +932,9 @@
             searchOffset = 0;
 
             resultsDiv.innerHTML = "";
-            document.getElementById("pagerInfo").textContent = "No results";
-            document.getElementById("prevPage").disabled = true;
-            document.getElementById("nextPage").disabled = true;
+            pagerInfo.textContent = "No results";
+            prevPage.disabled = true;
+            nextPage.disabled = true;
           });
         }
 
@@ -960,7 +962,7 @@
         if (preset7d) preset7d.addEventListener("click", () => runPreset(7));
         if (preset30d) preset30d.addEventListener("click", () => runPreset(30));
 
-        document.getElementById("tabBrowse").onclick = async () => {
+        tabBrowse.onclick = async () => {
           setMode("browse");
 
           setActiveTab("browse");
@@ -975,16 +977,16 @@
           const total = data.estimatedTotalHits ?? 0;
           const start = total === 0 ? 0 : browseOffset + 1;
           const end = Math.min(browseOffset + (data.hits?.length || 0), total);
-          document.getElementById("pagerInfo").textContent =
+          pagerInfo.textContent =
             total === 0 ? "No files" : `${start}-${end} of ${total}`;
 
           resultsDiv.innerHTML = "";
 
           if (!data.hits || data.hits.length === 0) {
-            document.getElementById("emptyState").style.display = "block";
+            emptyState.style.display = "block";
             return;
           } else {
-            document.getElementById("emptyState").style.display = "none";
+            emptyState.style.display = "none";
           }
 
           (data.hits || []).forEach(hit => {
@@ -1211,11 +1213,11 @@
               };
             }
           });
-          document.getElementById("prevPage").disabled = (browseOffset === 0);
-          document.getElementById("nextPage").disabled = !data.hits || data.hits.length < browseLimit;
+          prevPage.disabled = (browseOffset === 0);
+          nextPage.disabled = !data.hits || data.hits.length < browseLimit;
         };
 
-        document.getElementById("tabSearch").onclick = async () => {
+        tabSearch.onclick = async () => {
           const wasSearch = (mode === "search");
 
           setMode("search");
@@ -1235,9 +1237,9 @@
 
           // If switching into Search mode, don't clear results if a query already exists.
           if (!searchQuery) {
-            document.getElementById("pagerInfo").textContent = "No results";
-            document.getElementById("prevPage").disabled = true;
-            document.getElementById("nextPage").disabled = true;
+            pagerInfo.textContent = "No results";
+            prevPage.disabled = true;
+            nextPage.disabled = true;
           }
         };
         if (tabSettings) {
@@ -1433,22 +1435,22 @@
         }
         document.getElementById("uploadBtn")?.addEventListener("click", doUpload);
 
-        document.getElementById("prevPage").onclick = async () => {
+        prevPage.onclick = async () => {
           if (mode === "settings") return;
           if (mode === "browse") {
             browseOffset = Math.max(0, browseOffset - browseLimit);
-            await document.getElementById("tabBrowse").onclick();
+            await tabBrowse.onclick();
           } else {
             searchOffset = Math.max(0, searchOffset - browseLimit);
             await performSearch();
           }
         };
 
-        document.getElementById("nextPage").onclick = async () => {
+        nextPage.onclick = async () => {
           if (mode === "settings") return;
           if (mode === "browse") {
             browseOffset += browseLimit;
-            await document.getElementById("tabBrowse").onclick();
+            await tabBrowse.onclick();
           } else {
             searchOffset += browseLimit;
             await performSearch();
