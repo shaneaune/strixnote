@@ -1009,7 +1009,7 @@
             div.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <div>
-        <div class="file">${hit.filename}</div>
+        <div class="file">${hit.filename} <span class="procBadge small muted"></span></div>
         <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
       </div>
         <div style="display:flex; gap:8px; align-items:center;">
@@ -1069,156 +1069,163 @@
 
 
             resultsDiv.appendChild(div);
+
             // Check processing state
             const badge = div.querySelector(".procBadge");
             if (badge) {
               fetch(`/api/status?filename=${encodeURIComponent(hit.filename)}`)
                 .then(r => r.json())
                 .then(s => {
+                  const del = div.querySelector(".btn-delete");
+
                   if (s.state === "processing" || s.state === "queued") {
                     badge.textContent = "Processing…";
+                    if (del) del.disabled = true;
+                  } else {
+                    badge.textContent = "";
+                    if (del) del.disabled = false;
                   }
                 })
                 .catch(() => { });
-            }
-            div.querySelector(".btn-delete").onclick = async (e) => {
-              e.stopPropagation();
-              if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
+        }
+        div.querySelector(".btn-delete").onclick = async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
 
-              const resp = await fetch("/api/delete", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: hit.filename })
-              });
+          const resp = await fetch("/api/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: hit.filename })
+          });
 
-              const data = await resp.json();
-              if (!resp.ok) {
-                alert("Delete failed: " + (data.error || resp.statusText));
-                return;
-              }
+          const data = await resp.json();
+          if (!resp.ok) {
+            alert("Delete failed: " + (data.error || resp.statusText));
+            return;
+          }
 
-              div.remove();
-            };
-            const textBtn = div.querySelector(".btn-text");
-            const transcriptWrap = div.querySelector(".transcriptWrap");
-            const transcriptBox = div.querySelector(".transcriptBox");
+          div.remove();
+        };
+        const textBtn = div.querySelector(".btn-text");
+        const transcriptWrap = div.querySelector(".transcriptWrap");
+        const transcriptBox = div.querySelector(".transcriptBox");
 
-            const tsToggle = div.querySelector(".tsToggle");
+        const tsToggle = div.querySelector(".tsToggle");
 
-            const renderTranscript = async () => {
-              const fn = textBtn.getAttribute("data-fn") || "";
-              const base = baseName(fn);
-              const wantTs = !!(tsToggle && tsToggle.checked);
+        const renderTranscript = async () => {
+          const fn = textBtn.getAttribute("data-fn") || "";
+          const base = baseName(fn);
+          const wantTs = !!(tsToggle && tsToggle.checked);
 
-              if (!wantTs) {
-                const txtUrl = "/audio/" + encodeURIComponent(base + ".txt");
-                const r = await fetch(txtUrl);
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                const txt = await r.text();
-                transcriptBox.textContent = txt || "(empty)";
-                return;
-              }
+          if (!wantTs) {
+            const txtUrl = "/audio/" + encodeURIComponent(base + ".txt");
+            const r = await fetch(txtUrl);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const txt = await r.text();
+            transcriptBox.textContent = txt || "(empty)";
+            return;
+          }
 
-              const vttUrl = "/audio/" + encodeURIComponent(base + ".vtt");
-              const r = await fetch(vttUrl);
-              if (!r.ok) throw new Error(`HTTP ${r.status}`);
-              const vtt = await r.text();
+          const vttUrl = "/audio/" + encodeURIComponent(base + ".vtt");
+          const r = await fetch(vttUrl);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const vtt = await r.text();
 
-              const lines = (vtt || "").replace(/\r/g, "").split("\n");
-              const out = [];
-              let i = 0;
+          const lines = (vtt || "").replace(/\r/g, "").split("\n");
+          const out = [];
+          let i = 0;
 
-              const cleanTs = (t) => (t || "").trim().split(".")[0];
-              while (i < lines.length) {
-                const line = lines[i].trim();
+          const cleanTs = (t) => (t || "").trim().split(".")[0];
+          while (i < lines.length) {
+            const line = lines[i].trim();
+            i++;
+
+            if (!line || line === "WEBVTT") continue;
+
+            if (line.includes("-->")) {
+              const startTs = cleanTs(line.split("-->")[0]);
+              const cueText = [];
+              while (i < lines.length && lines[i].trim() !== "") {
+                cueText.push(lines[i].trim());
                 i++;
-
-                if (!line || line === "WEBVTT") continue;
-
-                if (line.includes("-->")) {
-                  const startTs = cleanTs(line.split("-->")[0]);
-                  const cueText = [];
-                  while (i < lines.length && lines[i].trim() !== "") {
-                    cueText.push(lines[i].trim());
-                    i++;
-                  }
-                  const text = cueText.join(" ").trim();
-                  if (text) out.push(`${startTs}  ${text}`);
-                }
               }
+              const text = cueText.join(" ").trim();
+              if (text) out.push(`${startTs}  ${text}`);
+            }
+          }
 
-              transcriptBox.textContent = out.join("\n") || "(empty)";
+          transcriptBox.textContent = out.join("\n") || "(empty)";
+        };
+
+        if (textBtn && transcriptWrap && transcriptBox) {
+          textBtn.onclick = async (e) => {
+            e.stopPropagation();
+
+            // Helper to close a row smoothly
+            const closeWrap = (w) => {
+              w.classList.remove("open");
+              w.style.maxHeight = "0px";
+              w.style.opacity = "0";
+
+              const b = w.closest(".result")?.querySelector(".btn-text");
+              if (b) b.textContent = "Text";
+
+              setTimeout(() => { w.style.display = "none"; }, 180);
             };
 
-            if (textBtn && transcriptWrap && transcriptBox) {
-              textBtn.onclick = async (e) => {
-                e.stopPropagation();
+            // Close any other open transcripts
+            document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
+              if (w !== transcriptWrap) closeWrap(w);
+            });
 
-                // Helper to close a row smoothly
-                const closeWrap = (w) => {
-                  w.classList.remove("open");
-                  w.style.maxHeight = "0px";
-                  w.style.opacity = "0";
-
-                  const b = w.closest(".result")?.querySelector(".btn-text");
-                  if (b) b.textContent = "Text";
-
-                  setTimeout(() => { w.style.display = "none"; }, 180);
-                };
-
-                // Close any other open transcripts
-                document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
-                  if (w !== transcriptWrap) closeWrap(w);
-                });
-
-                const isOpen = transcriptWrap.classList.contains("open");
-                if (isOpen) {
-                  closeWrap(transcriptWrap);
-                  return;
-                }
-
-                // Open smoothly
-                transcriptWrap.style.display = "block";
-                transcriptWrap.classList.add("open");
-                transcriptWrap.style.opacity = "0";
-                transcriptWrap.style.maxHeight = "0px";
-                textBtn.textContent = "Hide";
-
-                requestAnimationFrame(() => {
-                  transcriptWrap.style.opacity = "1";
-                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                });
-
-                // Lazy-load transcript once
-                if (!transcriptBox.dataset.loaded) {
-                  transcriptBox.textContent = "Loading...";
-                  try {
-                    await renderTranscript();
-                    transcriptBox.dataset.loaded = "1";
-                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                  } catch (err) {
-                    transcriptBox.textContent = "Failed to load transcript.";
-                  }
-                }
-
-                // If toggle exists, re-render when changed (while open)
-                if (tsToggle && !tsToggle.dataset.wired) {
-                  tsToggle.dataset.wired = "1";
-                  tsToggle.addEventListener("change", async (ev) => {
-                    ev.stopPropagation();
-                    if (!transcriptWrap.classList.contains("open")) return;
-
-                    transcriptBox.textContent = "Loading...";
-                    try {
-                      await renderTranscript();
-                      transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                    } catch (err) {
-                      transcriptBox.textContent = "Failed to load transcript.";
-                    }
-                  });
-                }
-              };
+            const isOpen = transcriptWrap.classList.contains("open");
+            if (isOpen) {
+              closeWrap(transcriptWrap);
+              return;
             }
+
+            // Open smoothly
+            transcriptWrap.style.display = "block";
+            transcriptWrap.classList.add("open");
+            transcriptWrap.style.opacity = "0";
+            transcriptWrap.style.maxHeight = "0px";
+            textBtn.textContent = "Hide";
+
+            requestAnimationFrame(() => {
+              transcriptWrap.style.opacity = "1";
+              transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+            });
+
+            // Lazy-load transcript once
+            if (!transcriptBox.dataset.loaded) {
+              transcriptBox.textContent = "Loading...";
+              try {
+                await renderTranscript();
+                transcriptBox.dataset.loaded = "1";
+                transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+              } catch (err) {
+                transcriptBox.textContent = "Failed to load transcript.";
+              }
+            }
+
+            // If toggle exists, re-render when changed (while open)
+            if (tsToggle && !tsToggle.dataset.wired) {
+              tsToggle.dataset.wired = "1";
+              tsToggle.addEventListener("change", async (ev) => {
+                ev.stopPropagation();
+                if (!transcriptWrap.classList.contains("open")) return;
+
+                transcriptBox.textContent = "Loading...";
+                try {
+                  await renderTranscript();
+                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                } catch (err) {
+                  transcriptBox.textContent = "Failed to load transcript.";
+                }
+              });
+            }
+          };
+        }
           });
         };
 
