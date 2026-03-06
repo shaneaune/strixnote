@@ -1260,7 +1260,7 @@
         };
         if (tabSettings) {
           tabSettings.onclick = async () => {
-            mode = "settings";
+            setMode("settings");
 
             if (searchBox) searchBox.value = "";
             searchQuery = "";
