@@ -877,13 +877,10 @@
           searchQuery = q; // allow empty query when date filter is set
 
           searchOffset = 0;
-          mode = "search";
-
+          setMode("search");
           document.getElementById("tabSearch").classList.add("active");
           document.getElementById("tabBrowse").classList.remove("active");
-          document.getElementById("searchWrap").style.display = "block";
-          document.getElementById("browsePager").style.display = "flex";
-
+          document.getElementById("tabSettings")?.classList.remove("active");
           await performSearch();
 
           // Reset date filter after executing search
