@@ -255,7 +255,7 @@
           }
 
           // "search"
-          document.getElementById("searchWrap").style.display = "block";
+          searchWrap.style.display = "block";
           settingsWrap.style.display = "none";
           playerPanel.style.display = "block";
 
@@ -890,9 +890,7 @@
           searchQuery = query; // may be empty for date-only
           searchOffset = 0;
           setMode("search");
-          tabSearch.classList.add("active");
-          tabBrowse.classList.remove("active");
-          tabSettings?.classList.remove("active");
+          setActiveTab("search");
 
           await performSearch();
 
