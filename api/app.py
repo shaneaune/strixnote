@@ -4,6 +4,7 @@ import time
 import shutil
 from pathlib import Path
 
+import subprocess
 import requests
 from flask import Flask, request, jsonify, Response
 
@@ -97,6 +98,221 @@ def _meili_request(method: str, path: str, json_body=None, timeout=5):
     r = requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
     return r
 
+def probe_duration_seconds(path: str) -> float:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return 0.0
+
+
+def parse_vtt_segments(vtt_text: str) -> list[dict]:
+    lines = (vtt_text or "").replace("\r", "").split("\n")
+    segments = []
+    i = 0
+
+    def vtt_time_to_ms(ts: str) -> int:
+        ts = (ts or "").strip()
+        if "." not in ts:
+            ts = ts + ".000"
+        hhmmss, ms = ts.split(".", 1)
+        h, m, s = [int(x) for x in hhmmss.split(":")]
+        ms = int((ms + "000")[:3])
+        return ((h * 3600 + m * 60 + s) * 1000) + ms
+
+    while i < len(lines):
+        line = lines[i].strip()
+        i += 1
+
+        if not line or line == "WEBVTT":
+            continue
+
+        if "-->" not in line:
+            continue
+
+        start_raw, end_raw = [x.strip() for x in line.split("-->", 1)]
+        cue_lines = []
+
+        while i < len(lines) and lines[i].strip() != "":
+            cue_lines.append(lines[i].strip())
+            i += 1
+
+        text = " ".join(cue_lines).strip()
+        if not text:
+            continue
+
+        segments.append(
+            {
+                "start_ms": vtt_time_to_ms(start_raw),
+                "end_ms": vtt_time_to_ms(end_raw),
+                "text": text,
+            }
+        )
+
+    return segments
+
+
+def build_file_doc(audio_path: Path, txt_path: Path) -> dict:
+    filename = audio_path.name
+    base = audio_path.stem
+    text = txt_path.read_text(encoding="utf-8").strip()
+    created_at = int(audio_path.stat().st_mtime)
+
+    return {
+        "id": safe_id_from_filename(filename),
+        "filename": filename,
+        "text": text,
+        "created_at": created_at,
+        "recorded_at": created_at,
+        "audio_bytes": audio_path.stat().st_size,
+        "duration_s": probe_duration_seconds(str(audio_path)),
+    }
+
+
+def build_segment_docs(audio_path: Path, vtt_path: Path) -> list[dict]:
+    filename = audio_path.name
+    base_id = safe_id_from_filename(filename)
+    created_at = int(audio_path.stat().st_mtime)
+    vtt_text = vtt_path.read_text(encoding="utf-8")
+    parsed = parse_vtt_segments(vtt_text)
+
+    docs = []
+    for i, seg in enumerate(parsed):
+        docs.append(
+            {
+                "id": f"{base_id}_{i:06d}",
+                "filename": filename,
+                "start_ms": seg["start_ms"],
+                "end_ms": seg["end_ms"],
+                "text": seg["text"],
+                "created_at": created_at,
+                "recorded_at": created_at,
+            }
+        )
+    return docs
+
+def rebuild_meili_from_processed() -> dict:
+    processed_dir = Path(PROCESSED_DIR)
+
+    summary = {
+        "ok": True,
+        "files_scanned": 0,
+        "file_docs_indexed": 0,
+        "segment_docs_indexed": 0,
+        "segment_files_skipped": 0,
+        "skipped_files": [],
+        "errors": [],
+    }
+
+    if not processed_dir.exists():
+        return {
+            "ok": False,
+            "error": f"processed directory not found: {processed_dir}",
+        }
+
+    audio_files = sorted(
+        p for p in processed_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in AUDIO_EXTS
+    )
+
+    summary["files_scanned"] = len(audio_files)
+
+    # Clear existing docs first
+    try:
+        r1 = _meili_request("DELETE", f"/indexes/{INDEX_TRANSCRIPTS}/documents", timeout=30)
+        if r1.status_code not in (200, 202, 204):
+            r1.raise_for_status()
+
+        r2 = _meili_request("DELETE", f"/indexes/{INDEX_SEGMENTS}/documents", timeout=30)
+        if r2.status_code not in (200, 202, 204):
+            r2.raise_for_status()
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": f"failed clearing Meili indexes: {e}",
+        }
+
+    file_docs = []
+    segment_docs = []
+
+    for audio_path in audio_files:
+        txt_path = processed_dir / f"{audio_path.stem}.txt"
+        vtt_path = processed_dir / f"{audio_path.stem}.vtt"
+
+        if not txt_path.exists():
+            summary["skipped_files"].append({
+                "filename": audio_path.name,
+                "reason": "missing txt",
+            })
+            continue
+
+        try:
+            file_docs.append(build_file_doc(audio_path, txt_path))
+        except Exception as e:
+            summary["errors"].append({
+                "filename": audio_path.name,
+                "stage": "file_doc",
+                "error": str(e),
+            })
+            continue
+
+        if vtt_path.exists():
+            try:
+                docs = build_segment_docs(audio_path, vtt_path)
+                segment_docs.extend(docs)
+            except Exception as e:
+                summary["errors"].append({
+                    "filename": audio_path.name,
+                    "stage": "segment_docs",
+                    "error": str(e),
+                })
+        else:
+            summary["segment_files_skipped"] += 1
+
+    try:
+        if file_docs:
+            r = _meili_request(
+                "POST",
+                f"/indexes/{INDEX_TRANSCRIPTS}/documents",
+                json_body=file_docs,
+                timeout=60,
+            )
+            r.raise_for_status()
+            summary["file_docs_indexed"] = len(file_docs)
+
+        if segment_docs:
+            r = _meili_request(
+                "POST",
+                f"/indexes/{INDEX_SEGMENTS}/documents",
+                json_body=segment_docs,
+                timeout=120,
+            )
+            r.raise_for_status()
+            summary["segment_docs_indexed"] = len(segment_docs)
+
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": f"failed indexing rebuilt documents: {e}",
+            "partial_summary": summary,
+        }
+
+    return summary
 
 def ensure_meili_schema():
     """
@@ -609,6 +825,19 @@ def delete():
         return jsonify(response), 502
 
     return jsonify(response), 200
+
+@app.post("/reindex")
+def reindex():
+    try:
+        result = rebuild_meili_from_processed()
+        status = 200 if result.get("ok") else 500
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"reindex failed: {e}",
+        }), 500
+    
 # -----------------------------
 # Settings (persisted JSON)
 # -----------------------------
