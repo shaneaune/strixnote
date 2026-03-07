@@ -345,3 +345,67 @@ select {
   background-repeat: no-repeat;
   padding-right: 32px;
 }
+
+@media (max-width: 900px) {
+  .container {
+    margin: 16px auto;
+    padding: 0 12px;
+  }
+
+  .header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  #searchWrap .row {
+    flex-wrap: wrap !important;
+  }
+
+  #searchWrap input,
+  #searchWrap select,
+  #searchWrap button {
+    max-width: 100%;
+  }
+
+  #searchBox {
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  audio {
+    width: 100%;
+    max-width: 100%;
+    display: block;
+  }
+
+  .captionBox {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 600px) {
+  .container {
+    padding: 0 10px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .tabs {
+    gap: 8px;
+  }
+
+  .tab {
+    padding: 8px 12px;
+  }
+}
