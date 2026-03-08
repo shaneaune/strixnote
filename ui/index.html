@@ -172,6 +172,24 @@
         <div id="captionBox" class="captionBox"></div>
       </div>
 
+      <div id="browseSortBar" class="row" style="display:none; gap:10px; align-items:center; margin-top:10px;">
+        <div class="small muted">Sort</div>
+        <select id="browseSortOrder" title="Sort browse files by date"
+          style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+      </div>
+
+      <div id="searchSortBar" class="row" style="display:none; gap:10px; align-items:center; margin-top:10px;">
+        <div class="small muted">Sort</div>
+        <select id="searchSortOrder" title="Sort search file results by date"
+          style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+      </div>
+
       <div id="results"></div>
 
       <div id="emptyState" class="small muted" style="display:none; padding:20px; text-align:center;">
@@ -196,6 +214,7 @@
         const playerPanel = document.getElementById("playerPanel");
         const captionBox = document.getElementById("captionBox");
         const resultsDiv = document.getElementById("results");
+        const browseSortBar = document.getElementById("browseSortBar");
         const searchBox = document.getElementById("searchBox");
         const searchMode = document.getElementById("searchMode");
         const dateField = document.getElementById("dateField");
@@ -212,10 +231,13 @@
         const tabBrowse = document.getElementById("tabBrowse");
         const searchWrap = document.getElementById("searchWrap");
         const browsePager = document.getElementById("browsePager");
+        const searchSortBar = document.getElementById("searchSortBar");
+        const searchSortOrder = document.getElementById("searchSortOrder");
         const emptyState = document.getElementById("emptyState");
         const pagerInfo = document.getElementById("pagerInfo");
         const prevPage = document.getElementById("prevPage");
         const nextPage = document.getElementById("nextPage");
+        const browseSortOrder = document.getElementById("browseSortOrder");
 
         function setActiveTab(tabName) {
           tabSearch?.classList.toggle("active", tabName === "search");
@@ -231,6 +253,8 @@
             settingsWrap.style.display = "block";
             playerPanel.style.display = "none";
             browsePager.style.display = "none";
+            if (browseSortBar) browseSortBar.style.display = "none";
+            if (searchSortBar) searchSortBar.style.display = "none";
             return;
           }
 
@@ -239,6 +263,8 @@
             settingsWrap.style.display = "none";
             playerPanel.style.display = "block";
             browsePager.style.display = "flex";
+            if (browseSortBar) browseSortBar.style.display = "flex";
+            if (searchSortBar) searchSortBar.style.display = "none";
 
             // Reset Search tab mode when leaving it (Browse should default back to Files)
             searchModeValue = "files";
@@ -261,6 +287,8 @@
           searchWrap.style.display = "block";
           settingsWrap.style.display = "none";
           playerPanel.style.display = "block";
+          if (browseSortBar) browseSortBar.style.display = "none";
+          if (searchSortBar) searchSortBar.style.display = "none";
 
           // Entering Search: clear any Browse-rendered list so Search starts clean
           resultsDiv.innerHTML = "";
@@ -625,7 +653,7 @@
             limit: browseLimit,
             offset: searchOffset,
             filter: filter || undefined,
-            sort: ["created_at:desc"],
+            sort: [isFiles ? `created_at:${searchSortOrder?.value || "desc"}` : "created_at:desc"],
             attributesToHighlight: ["text"],
             attributesToCrop: ["text"],
             cropLength: 60
@@ -639,6 +667,7 @@
             resultsDiv.innerHTML = `<div class="small muted" style="padding:12px 2px;">Search failed: ${escapeHtml(msg)}</div>`;
             browsePager.style.display = "none";
             pagerInfo.textContent = "";
+            if (searchSortBar) searchSortBar.style.display = "none";
             return;
           }
 
@@ -648,8 +677,11 @@
             resultsDiv.innerHTML = `<div class="small muted" style="padding:12px 2px;">No results.</div>`;
             browsePager.style.display = "none";
             pagerInfo.textContent = "";
+            if (searchSortBar) searchSortBar.style.display = "none";
             return;
           }
+
+          if (searchSortBar) searchSortBar.style.display = isFiles ? "flex" : "none";
 
           (data.hits || []).forEach(hit => {
             const div = document.createElement("div");
@@ -974,7 +1006,7 @@
             q: "",
             limit: browseLimit,
             offset: browseOffset,
-            sort: ["created_at:desc"]
+            sort: [`created_at:${browseSortOrder?.value || "desc"}`]
           });
 
           const total = data.estimatedTotalHits ?? 0;
@@ -1219,6 +1251,23 @@
           prevPage.disabled = (browseOffset === 0);
           nextPage.disabled = !data.hits || data.hits.length < browseLimit;
         };
+
+        if (browseSortOrder) {
+          browseSortOrder.addEventListener("change", async () => {
+            if (mode !== "browse") return;
+            browseOffset = 0;
+            await tabBrowse.onclick();
+          });
+        }
+
+        if (searchSortOrder) {
+          searchSortOrder.addEventListener("change", async () => {
+            if (mode !== "search") return;
+            if (searchModeValue !== "files") return;
+            searchOffset = 0;
+            await runSearchFromUi(searchQuery || "", { clearDates: false });
+          });
+        }
 
         tabSearch.onclick = async () => {
           const wasSearch = (mode === "search");
