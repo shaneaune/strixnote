@@ -765,13 +765,6 @@
         </button>
 
         <a class="btn btn-secondary"
-           href="/audio/${baseName(hit.filename)}.txt"
-           download
-           style="height:38px; display:inline-flex; align-items:center;">
-          Download
-        </a>
-
-        <a class="btn btn-secondary"
            href="/audio/${hit.filename}"
            download
            style="height:38px; display:inline-flex; align-items:center;">
@@ -788,13 +781,21 @@
     </div>
 
           <div class="transcriptWrap" style="max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease; margin-top:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <div class="small muted">Transcript</div>
-          <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
-            <input type="checkbox" class="tsToggle">
-            Timestamps
-          </label>
-        </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div class="small muted">Transcript</div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button class="btn btn-secondary btn-transcript-download"
+                type="button"
+                data-fn="${hit.filename}"
+                style="height:32px; display:inline-flex; align-items:center;">
+                Download
+              </button>
+              <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+                <input type="checkbox" class="tsToggle">
+                Timestamps
+              </label>
+            </div>
+          </div>
         <div class="transcriptBox"
              style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
         </div>
@@ -879,6 +880,82 @@
 
                   // Find toggle (optional; Search HTML must include it)
                   const tsToggle = div.querySelector(".tsToggle");
+
+                    const dlBtn = div.querySelector(".btn-transcript-download");
+
+                    if (dlBtn && !dlBtn.dataset.wired) {
+                      dlBtn.dataset.wired = "1";
+                      dlBtn.addEventListener("click", async (e) => {
+                        e.stopPropagation();
+
+                        const fn = dlBtn.getAttribute("data-fn") || hit.filename || "";
+                        const base = baseName(fn);
+                        const wantTs = !!(tsToggle && tsToggle.checked);
+
+                        let text = "";
+                        let filename = "";
+
+                        if (!wantTs) {
+                          const r = await fetch("/audio/" + encodeURIComponent(base + ".txt"));
+                          if (!r.ok) {
+                            alert("Download failed: HTTP " + r.status);
+                            return;
+                          }
+                          text = await r.text();
+                          filename = base + ".txt";
+                        } else {
+                          const r = await fetch("/audio/" + encodeURIComponent(base + ".vtt"));
+                          if (!r.ok) {
+                            alert("Download failed: HTTP " + r.status);
+                            return;
+                          }
+
+                          const vtt = await r.text();
+                          const lines = (vtt || "").replace(/\r/g, "").split("\n");
+                          const out = [];
+                          let i = 0;
+
+                          const cleanTs = (t) => (t || "").trim().split(".")[0];
+
+                          while (i < lines.length) {
+                            const line = lines[i].trim();
+                            i++;
+
+                            if (!line || line === "WEBVTT") continue;
+
+                            if (line.includes("-->")) {
+                              const startTs = cleanTs(line.split("-->")[0]);
+                              const cueText = [];
+
+                              while (i < lines.length && lines[i].trim() !== "") {
+                                cueText.push(lines[i].trim());
+                                i++;
+                              }
+
+                              const txt = cueText.join(" ").trim();
+                              if (txt) out.push(`${startTs}  ${txt}`);
+                            }
+                          }
+
+                          text = out.join("\n");
+                          filename = base + "_timestamps.txt";
+                        }
+
+                        const blob = new Blob([text], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+
+                        setTimeout(() => {
+                          URL.revokeObjectURL(url);
+                          a.remove();
+                        }, 100);
+                      });
+                    }
 
                   // Render helper (txt or vtt->timestamped)
                   const renderTranscript = async () => {
@@ -1114,13 +1191,6 @@
             </button>
 
             <a class="btn btn-secondary"
-              href="/audio/${baseName(hit.filename)}.txt"
-              download
-              style="height:38px; display:inline-flex; align-items:center;">
-              Download
-            </a>
-
-            <a class="btn btn-secondary"
               href="/audio/${hit.filename}"
               download
               style="height:38px; display:inline-flex; align-items:center;">
@@ -1138,13 +1208,21 @@
 
       <div class="transcriptWrap"
      style="margin-top:10px; max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <div class="small muted">Transcript</div>
-            <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
-              <input type="checkbox" class="tsToggle">
-              Timestamps
-            </label>
-          </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div class="small muted">Transcript</div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-secondary btn-transcript-download"
+                  type="button"
+                  data-fn="${hit.filename}"
+                  style="height:32px; display:inline-flex; align-items:center;">
+                  Download
+                </button>
+                <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+                  <input type="checkbox" class="tsToggle">
+                  Timestamps
+                </label>
+              </div>
+            </div>
           <div class="transcriptBox"
                style="max-height:14em; overflow:auto; padding:10px; border:1px solid #333; border-radius:8px; white-space:pre-wrap;">
           </div>
@@ -1211,8 +1289,83 @@
             const textBtn = div.querySelector(".btn-text");
             const transcriptWrap = div.querySelector(".transcriptWrap");
             const transcriptBox = div.querySelector(".transcriptBox");
-
             const tsToggle = div.querySelector(".tsToggle");
+
+            const dlBtn = div.querySelector(".btn-transcript-download");
+
+            if (dlBtn) {
+              dlBtn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+
+                const fn = dlBtn.getAttribute("data-fn") || "";
+                const base = baseName(fn);
+                const wantTs = !!(tsToggle && tsToggle.checked);
+
+                let text = "";
+                let filename = "";
+
+                if (!wantTs) {
+                  const r = await fetch("/audio/" + encodeURIComponent(base + ".txt"));
+                  if (!r.ok) {
+                    alert("Download failed: HTTP " + r.status);
+                    return;
+                  }
+                  text = await r.text();
+                  filename = base + ".txt";
+                } else {
+                  const r = await fetch("/audio/" + encodeURIComponent(base + ".vtt"));
+                  if (!r.ok) {
+                    alert("Download failed: HTTP " + r.status);
+                    return;
+                  }
+
+                  const vtt = await r.text();
+                  const lines = (vtt || "").replace(/\r/g, "").split("\n");
+
+                  const out = [];
+                  let i = 0;
+
+                  const cleanTs = (t) => (t || "").trim().split(".")[0];
+
+                  while (i < lines.length) {
+                    const line = lines[i].trim();
+                    i++;
+
+                    if (!line || line === "WEBVTT") continue;
+
+                    if (line.includes("-->")) {
+                      const startTs = cleanTs(line.split("-->")[0]);
+                      const cueText = [];
+
+                      while (i < lines.length && lines[i].trim() !== "") {
+                        cueText.push(lines[i].trim());
+                        i++;
+                      }
+
+                      const txt = cueText.join(" ").trim();
+                      if (txt) out.push(`${startTs}  ${txt}`);
+                    }
+                  }
+
+                  text = out.join("\n");
+                  filename = base + "_timestamps.txt";
+                }
+
+                const blob = new Blob([text], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+
+                setTimeout(() => {
+                  URL.revokeObjectURL(url);
+                  a.remove();
+                }, 100);
+              });
+            }
 
             const renderTranscript = async () => {
               const fn = textBtn.getAttribute("data-fn") || "";
