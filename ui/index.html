@@ -610,6 +610,68 @@
           }
         }
 
+        const PINNED_FILES_KEY = "strixnote_pinned_files";
+
+        function getPinnedFiles() {
+          try {
+            const raw = localStorage.getItem(PINNED_FILES_KEY);
+            const arr = JSON.parse(raw || "[]");
+            return Array.isArray(arr) ? arr : [];
+          } catch (e) {
+            return [];
+          }
+        }
+
+        function setPinnedFiles(files) {
+          try {
+            localStorage.setItem(PINNED_FILES_KEY, JSON.stringify(files));
+          } catch (e) { }
+        }
+
+        function isPinnedFile(filename) {
+          return getPinnedFiles().includes(filename);
+        }
+
+        function setFilePinned(filename, pinned) {
+          const current = getPinnedFiles();
+          const next = pinned
+            ? Array.from(new Set([...current, filename]))
+            : current.filter(f => f !== filename);
+          setPinnedFiles(next);
+        }
+
+        async function getPinnedBrowseDocs() {
+          const pinned = getPinnedFiles();
+          if (!pinned.length) return [];
+
+          const sortDir = browseSortOrder?.value || "desc";
+          const docs = [];
+
+          for (const filename of pinned) {
+            try {
+              const safeFilename = String(filename).replace(/"/g, '\\"');
+              const data = await meili(INDEX_FILES, {
+                q: "",
+                limit: 1,
+                filter: `filename = "${safeFilename}"`,
+                sort: [`created_at:${sortDir}`]
+              });
+
+              const hit = (data.hits || [])[0];
+              if (hit) docs.push(hit);
+            } catch (e) {
+              // ignore missing/failed pinned entries
+            }
+          }
+
+          docs.sort((a, b) => {
+            const av = a?.created_at || 0;
+            const bv = b?.created_at || 0;
+            return sortDir === "asc" ? (av - bv) : (bv - av);
+          });
+
+          return docs;
+        }
         async function performSearch() {
 
           let filter = null;
@@ -1023,8 +1085,12 @@
           } else {
             emptyState.style.display = "none";
           }
+          const pinnedDocs = await getPinnedBrowseDocs();
+          const pinnedNames = new Set(pinnedDocs.map(d => d.filename));
+          const pageDocs = (data.hits || []).filter(d => !pinnedNames.has(d.filename));
+          const browseDocs = [...pinnedDocs, ...pageDocs];
 
-          (data.hits || []).forEach(hit => {
+          browseDocs.forEach(hit => {
             const div = document.createElement("div");
             div.className = "result";
             div.innerHTML = `
@@ -1033,35 +1099,41 @@
         <div class="file">${hit.filename} <span class="procBadge small muted"></span></div>
         <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
       </div>
-        <div style="display:flex; gap:8px; align-items:center;">
-                      <button class="btn btn-secondary btn-text"
-                    type="button"
-                    data-fn="${hit.filename}"
-                    style="height:38px; display:inline-flex; align-items:center;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <label class="small muted" title="Pin to top"
+              style="display:inline-flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+              <input type="checkbox" class="pinToggle" data-fn="${hit.filename}" ${isPinnedFile(hit.filename) ? "checked" : ""}>
+              Pin
+            </label>
+
+            <button class="btn btn-secondary btn-text"
+              type="button"
+              data-fn="${hit.filename}"
+              style="height:38px; display:inline-flex; align-items:center;">
               Text
             </button>
 
             <a class="btn btn-secondary"
-               href="/audio/${baseName(hit.filename)}.txt"
-               download
-               style="height:38px; display:inline-flex; align-items:center;">
+              href="/audio/${baseName(hit.filename)}.txt"
+              download
+              style="height:38px; display:inline-flex; align-items:center;">
               Download
             </a>
 
             <a class="btn btn-secondary"
-               href="/audio/${hit.filename}"
-               download
-               style="height:38px; display:inline-flex; align-items:center;">
+              href="/audio/${hit.filename}"
+              download
+              style="height:38px; display:inline-flex; align-items:center;">
               Audio
             </a>
 
             <button class="btn btn-secondary btn-delete"
-                    data-fn="${hit.filename}"
-                    ${currentFile === hit.filename ? "disabled" : ""}
-                    style="height:38px; display:inline-flex; align-items:center;">
+              data-fn="${hit.filename}"
+              ${currentFile === hit.filename ? "disabled" : ""}
+              style="height:38px; display:inline-flex; align-items:center;">
               Delete
             </button>
-        </div>
+          </div>
     </div>
 
       <div class="transcriptWrap"
@@ -1108,6 +1180,15 @@
                   }
                 })
                 .catch(() => { });
+            }
+            const pinToggle = div.querySelector(".pinToggle");
+            if (pinToggle) {
+              pinToggle.addEventListener("change", async (e) => {
+                e.stopPropagation();
+                setFilePinned(hit.filename, !!pinToggle.checked);
+                browseOffset = 0;
+                await tabBrowse.onclick();
+              });
             }
             div.querySelector(".btn-delete").onclick = async (e) => {
               e.stopPropagation();

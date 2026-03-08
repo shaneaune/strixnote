@@ -375,7 +375,7 @@ def ensure_meili_schema():
     # transcripts: date filtering
     try:
         desired_segments = {"filename", "created_at", "recorded_at"}
-        desired_transcripts = {"created_at", "recorded_at"}
+        desired_transcripts = {"filename", "created_at", "recorded_at"}
 
         def ensure_filterables(index_uid: str, desired: set[str]):
             r = _meili_request("GET", f"/indexes/{index_uid}/settings/filterable-attributes")
