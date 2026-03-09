@@ -584,7 +584,7 @@ Major UI Systems
             w.style.opacity = "0";
 
             const b = w.closest(".result")?.querySelector(".btn-text");
-            if (b) b.textContent = "Text";
+            if (b) b.textContent = "Transcript";
 
             setTimeout(() => { w.style.display = "none"; }, 180);
           };
@@ -971,7 +971,7 @@ Major UI Systems
                 type="button"
                 data-fn="${hit.filename}"
                 style="height:38px; display:inline-flex; align-items:center;">
-          Text
+          Transcript
         </button>
 
         <a class="btn btn-secondary"
@@ -1216,7 +1216,7 @@ Major UI Systems
               type="button"
               data-fn="${hit.filename}"
               style="height:38px; display:inline-flex; align-items:center;">
-              Text
+              Transcript
             </button>
 
             <a class="btn btn-secondary"
@@ -1337,15 +1337,15 @@ Major UI Systems
               });
             }
 
-                          wireTranscriptControls({
-                div,
-                filename: hit.filename,
-                textBtn,
-                transcriptWrap,
-                transcriptBox,
-                tsToggle,
-                dlBtn,
-              });
+            wireTranscriptControls({
+              div,
+              filename: hit.filename,
+              textBtn,
+              transcriptWrap,
+              transcriptBox,
+              tsToggle,
+              dlBtn,
+            });
           });
           prevPage.disabled = (browseOffset === 0);
           nextPage.disabled = !data.hits || data.hits.length < browseLimit;

@@ -183,6 +183,10 @@ button,
   color: var(--color-text);
 }
 
+a.btn:hover {
+  text-decoration: none;
+}
+
 button:hover,
 .btn:hover {
   border-color: rgba(91, 63, 214, 0.6);
@@ -207,6 +211,10 @@ button:disabled,
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+a.btn {
+  text-decoration: none;
 }
 
 /* Results */
