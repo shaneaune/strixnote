@@ -567,6 +567,102 @@ Major UI Systems
           }, 100);
         }
 
+        function wireTranscriptControls({
+          div,
+          filename,
+          textBtn,
+          transcriptWrap,
+          transcriptBox,
+          tsToggle,
+          dlBtn,
+        }) {
+          if (!textBtn || !transcriptWrap || !transcriptBox) return;
+
+          const closeWrap = (w) => {
+            w.classList.remove("open");
+            w.style.maxHeight = "0px";
+            w.style.opacity = "0";
+
+            const b = w.closest(".result")?.querySelector(".btn-text");
+            if (b) b.textContent = "Text";
+
+            setTimeout(() => { w.style.display = "none"; }, 180);
+          };
+
+          const renderTranscript = async () => {
+            const base = baseName(filename || "");
+            const wantTs = !!(tsToggle && tsToggle.checked);
+            transcriptBox.textContent = await fetchTranscriptText(base, wantTs, "(empty)");
+          };
+
+          if (dlBtn && !dlBtn.dataset.wired) {
+            dlBtn.dataset.wired = "1";
+            dlBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+
+              try {
+                const base = baseName(filename || "");
+                const wantTs = !!(tsToggle && tsToggle.checked);
+                await downloadTranscriptFile(base, wantTs);
+              } catch (err) {
+                alert("Download failed: " + (err?.message || err));
+              }
+            });
+          }
+
+          textBtn.onclick = async (e) => {
+            e.stopPropagation();
+
+            document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
+              if (w !== transcriptWrap) closeWrap(w);
+            });
+
+            const isOpen = transcriptWrap.classList.contains("open");
+            if (isOpen) {
+              closeWrap(transcriptWrap);
+              return;
+            }
+
+            transcriptWrap.style.display = "block";
+            transcriptWrap.classList.add("open");
+            transcriptWrap.style.opacity = "0";
+            transcriptWrap.style.maxHeight = "0px";
+            textBtn.textContent = "Hide";
+
+            requestAnimationFrame(() => {
+              transcriptWrap.style.opacity = "1";
+              transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+            });
+
+            if (!transcriptBox.dataset.loaded) {
+              transcriptBox.textContent = "Loading...";
+              try {
+                await renderTranscript();
+                transcriptBox.dataset.loaded = "1";
+                transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+              } catch (err) {
+                transcriptBox.textContent = "Failed to load transcript.";
+              }
+            }
+
+            if (tsToggle && !tsToggle.dataset.wired) {
+              tsToggle.dataset.wired = "1";
+              tsToggle.addEventListener("change", async (ev) => {
+                ev.stopPropagation();
+                if (!transcriptWrap.classList.contains("open")) return;
+
+                transcriptBox.textContent = "Loading...";
+                try {
+                  await renderTranscript();
+                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                } catch (err) {
+                  transcriptBox.textContent = "Failed to load transcript.";
+                }
+              });
+            }
+          };
+        }
+
         // ============================================================================
         // Meilisearch Proxy Request
         // Sends search requests to the backend proxy which forwards to Meilisearch.
@@ -946,108 +1042,22 @@ Major UI Systems
                 };
               }
 
-              // transcript toggle (auto-close others)
               const textBtn = div.querySelector(".btn-text");
               const transcriptWrap = div.querySelector(".transcriptWrap");
               const transcriptBox = div.querySelector(".transcriptBox");
+              const tsToggle = div.querySelector(".tsToggle");
+              const dlBtn = div.querySelector(".btn-transcript-download");
 
-              if (textBtn && transcriptWrap && transcriptBox) {
-                textBtn.onclick = async (e) => {
-                  e.stopPropagation();
-
-                  // Helper to close a row smoothly
-                  const closeWrap = (w) => {
-                    w.classList.remove("open");
-                    w.style.maxHeight = "0px";
-                    w.style.opacity = "0";
-
-                    const b = w.closest(".result")?.querySelector(".btn-text");
-                    if (b) b.textContent = "Text";
-
-                    // actually hide after the collapse transition
-                    setTimeout(() => { w.style.display = "none"; }, 180);
-                  };
-
-                  // Close any other open transcripts
-                  document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
-                    if (w !== transcriptWrap) closeWrap(w);
-                  });
-
-                  const isOpen = transcriptWrap.classList.contains("open");
-                  if (isOpen) {
-                    closeWrap(transcriptWrap);
-                    return;
-                  }
-
-                  // Open smoothly
-                  transcriptWrap.style.display = "block";
-                  transcriptWrap.classList.add("open");
-                  transcriptWrap.style.opacity = "0";
-                  transcriptWrap.style.maxHeight = "0px";
-                  textBtn.textContent = "Hide";
-
-                  // wait one frame so display:block applies, then measure/expand
-                  requestAnimationFrame(() => {
-                    transcriptWrap.style.opacity = "1";
-                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                  });
-
-                  // Find toggle (optional; Search HTML must include it)
-                  const tsToggle = div.querySelector(".tsToggle");
-
-                  const dlBtn = div.querySelector(".btn-transcript-download");
-
-                  if (dlBtn && !dlBtn.dataset.wired) {
-                    dlBtn.dataset.wired = "1";
-                    dlBtn.addEventListener("click", async (e) => {
-                      e.stopPropagation();
-
-                      try {
-                        const fn = dlBtn.getAttribute("data-fn") || hit.filename || "";
-                        const base = baseName(fn);
-                        const wantTs = !!(tsToggle && tsToggle.checked);
-                        await downloadTranscriptFile(base, wantTs);
-                      } catch (err) {
-                        alert("Download failed: " + (err?.message || err));
-                      }
-                    });
-                  }
-
-                  // Render helper (txt or vtt->timestamped)
-                  const renderTranscript = async () => {
-                    const fn = textBtn.getAttribute("data-fn") || hit.filename || "";
-                    const base = baseName(fn);
-                    const wantTs = !!(tsToggle && tsToggle.checked);
-                    transcriptBox.textContent = await fetchTranscriptText(base, wantTs, "(empty)");
-                  };
-
-                  transcriptBox.textContent = "Loading...";
-                  try {
-                    await renderTranscript();
-                    transcriptBox.dataset.loaded = "1";
-                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                  } catch (err) {
-                    transcriptBox.textContent = "Failed to load transcript.";
-                  }
-
-                  // If toggle exists, re-render when changed (while open)
-                  if (tsToggle && !tsToggle.dataset.wired) {
-                    tsToggle.dataset.wired = "1";
-                    tsToggle.addEventListener("change", async (ev) => {
-                      ev.stopPropagation();
-                      if (!transcriptWrap.classList.contains("open")) return;
-
-                      transcriptBox.textContent = "Loading...";
-                      try {
-                        await renderTranscript();
-                        transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                      } catch (err) {
-                        transcriptBox.textContent = "Failed to load transcript.";
-                      }
-                    });
-                  }
-                }; // end textBtn.onclick
-              } // end if (textBtn && transcriptWrap && transcriptBox)
+              wireTranscriptControls({
+                div,
+                filename: hit.filename,
+                textBtn,
+                transcriptWrap,
+                transcriptBox,
+                tsToggle,
+                dlBtn,
+              });
+              // transcript toggle (auto-close others)
             } else {
 
               div.innerHTML = `
@@ -1327,120 +1337,15 @@ Major UI Systems
               });
             }
 
-            const renderTranscript = async () => {
-              const fn = textBtn.getAttribute("data-fn") || "";
-              const base = baseName(fn);
-              const wantTs = !!(tsToggle && tsToggle.checked);
-
-              if (!wantTs) {
-                const txtUrl = "/audio/" + encodeURIComponent(base + ".txt");
-                const r = await fetch(txtUrl);
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                const txt = await r.text();
-                transcriptBox.textContent = txt || "(empty)";
-                return;
-              }
-
-              const vttUrl = "/audio/" + encodeURIComponent(base + ".vtt");
-              const r = await fetch(vttUrl);
-              if (!r.ok) throw new Error(`HTTP ${r.status}`);
-              const vtt = await r.text();
-
-              const lines = (vtt || "").replace(/\r/g, "").split("\n");
-              const out = [];
-              let i = 0;
-
-              const cleanTs = (t) => (t || "").trim().split(".")[0];
-              while (i < lines.length) {
-                const line = lines[i].trim();
-                i++;
-
-                if (!line || line === "WEBVTT") continue;
-
-                if (line.includes("-->")) {
-                  const startTs = cleanTs(line.split("-->")[0]);
-                  const cueText = [];
-                  while (i < lines.length && lines[i].trim() !== "") {
-                    cueText.push(lines[i].trim());
-                    i++;
-                  }
-                  const text = cueText.join(" ").trim();
-                  if (text) out.push(`${startTs}  ${text}`);
-                }
-              }
-
-              transcriptBox.textContent = out.join("\n") || "(empty)";
-            };
-
-            if (textBtn && transcriptWrap && transcriptBox) {
-              textBtn.onclick = async (e) => {
-                e.stopPropagation();
-
-                // Helper to close a row smoothly
-                const closeWrap = (w) => {
-                  w.classList.remove("open");
-                  w.style.maxHeight = "0px";
-                  w.style.opacity = "0";
-
-                  const b = w.closest(".result")?.querySelector(".btn-text");
-                  if (b) b.textContent = "Text";
-
-                  setTimeout(() => { w.style.display = "none"; }, 180);
-                };
-
-                // Close any other open transcripts
-                document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
-                  if (w !== transcriptWrap) closeWrap(w);
-                });
-
-                const isOpen = transcriptWrap.classList.contains("open");
-                if (isOpen) {
-                  closeWrap(transcriptWrap);
-                  return;
-                }
-
-                // Open smoothly
-                transcriptWrap.style.display = "block";
-                transcriptWrap.classList.add("open");
-                transcriptWrap.style.opacity = "0";
-                transcriptWrap.style.maxHeight = "0px";
-                textBtn.textContent = "Hide";
-
-                requestAnimationFrame(() => {
-                  transcriptWrap.style.opacity = "1";
-                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                });
-
-                // Lazy-load transcript once
-                if (!transcriptBox.dataset.loaded) {
-                  transcriptBox.textContent = "Loading...";
-                  try {
-                    await renderTranscript();
-                    transcriptBox.dataset.loaded = "1";
-                    transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                  } catch (err) {
-                    transcriptBox.textContent = "Failed to load transcript.";
-                  }
-                }
-
-                // If toggle exists, re-render when changed (while open)
-                if (tsToggle && !tsToggle.dataset.wired) {
-                  tsToggle.dataset.wired = "1";
-                  tsToggle.addEventListener("change", async (ev) => {
-                    ev.stopPropagation();
-                    if (!transcriptWrap.classList.contains("open")) return;
-
-                    transcriptBox.textContent = "Loading...";
-                    try {
-                      await renderTranscript();
-                      transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-                    } catch (err) {
-                      transcriptBox.textContent = "Failed to load transcript.";
-                    }
-                  });
-                }
-              };
-            }
+                          wireTranscriptControls({
+                div,
+                filename: hit.filename,
+                textBtn,
+                transcriptWrap,
+                transcriptBox,
+                tsToggle,
+                dlBtn,
+              });
           });
           prevPage.disabled = (browseOffset === 0);
           nextPage.disabled = !data.hits || data.hits.length < browseLimit;
