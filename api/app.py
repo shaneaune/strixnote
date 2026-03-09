@@ -1,3 +1,25 @@
+"""
+StrixNote API
+
+Flask API responsible for:
+
+- Uploading audio files
+- Managing transcription jobs
+- Proxying Meilisearch queries
+- Returning transcript status
+- Deleting audio/transcript files
+- Rebuilding search indexes
+
+Key routes:
+POST /api/upload
+POST /api/meili/search/<index>
+POST /api/delete
+POST /api/reindex
+GET  /api/status
+GET  /api/settings
+PUT  /api/settings
+"""
+
 import os
 import re
 import time

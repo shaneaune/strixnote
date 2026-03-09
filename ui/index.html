@@ -1,3 +1,48 @@
+<!--
+===============================================================================
+StrixNote Web UI (index.html)
+
+Primary Responsibilities
+-------------------------------------------------------------------------------
+- Upload audio files to the backend
+- Browse previously processed transcripts
+- Search Meilisearch indexes (files or individual transcript segments)
+- Control the audio player and caption display
+- Render transcripts from TXT or VTT files
+- Manage UI state (tabs, sorting, pagination, pinned files)
+- Export transcript text (plain or timestamped)
+
+Architecture Overview
+-------------------------------------------------------------------------------
+Backend services exposed through API endpoints:
+
+/api/upload           Upload audio files
+/api/status           Processing status polling
+/api/delete           Delete audio + transcript files
+/api/settings         Load/save runtime configuration
+/api/reindex          Rebuild search indexes
+/api/meili/search     Proxy to Meilisearch
+
+Static transcript assets served from:
+
+/audio/<file>         Audio playback
+/audio/<file>.txt     Plain transcript
+/audio/<file>.vtt     Whisper subtitle output
+
+Major UI Systems
+-------------------------------------------------------------------------------
+1. Upload system
+2. Search interface (segments/files)
+3. Browse interface (file listing)
+4. Audio player with captions
+5. Transcript viewer and export
+6. Settings editor
+7. Theme toggle
+8. Pagination + sorting
+9. LocalStorage persistence (search mode, theme, pinned files)
+===============================================================================
+-->
+
 <!DOCTYPE html>
 <html>
 
@@ -206,6 +251,12 @@
       <script src="/config.js"></script>
 
       <script>
+
+// ============================================================================
+// Configuration and Global DOM References
+// Loads Meilisearch config and caches commonly used UI elements
+// ============================================================================
+
         const MEILI = window.APP_CONFIG.MEILI_URL;
         const INDEX_SEG = window.APP_CONFIG.MEILI_INDEX_SEGMENTS;
         const INDEX_FILES = window.APP_CONFIG.MEILI_INDEX_FILES;
@@ -401,6 +452,12 @@
             if (searchQuery) await performSearch();
           });
         }
+        
+// ============================================================================
+// Utility Functions
+// Small helpers used throughout the UI.
+// Includes formatting, timestamp conversion, and parsing utilities.
+// ============================================================================
 
         function baseName(f) { return f.replace(/\.[^/.]+$/, ""); }
         function msToHMS(ms) {
@@ -476,6 +533,13 @@
 
           return out.join("\n");
         }
+
+// ============================================================================
+// Meilisearch Proxy Request
+// Sends search requests to the backend proxy which forwards to Meilisearch.
+// Includes timeout protection and response validation.
+// ============================================================================
+
         async function meili(index, body) {
           const url = `/api/meili/search/${encodeURIComponent(index)}`;
 
@@ -575,6 +639,12 @@
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
         }
+
+// ============================================================================
+// Audio Player Controller
+// Handles playback loading, subtitle tracks, and caption rendering.
+// ============================================================================
+
         function loadFile(filename, startMs = 0) {
           currentFile = filename;
           resetPlayer();
@@ -672,6 +742,17 @@
 
           return docs;
         }
+
+// ============================================================================
+// Search Engine
+// Executes queries against Meilisearch and renders results.
+// Supports:
+//   • file search
+//   • segment search
+//   • date filters
+//   • sorting
+// ============================================================================
+
         async function performSearch() {
 
           let filter = null;
@@ -1135,6 +1216,11 @@
         if (presetToday) presetToday.addEventListener("click", () => runPreset(1));
         if (preset7d) preset7d.addEventListener("click", () => runPreset(7));
         if (preset30d) preset30d.addEventListener("click", () => runPreset(30));
+
+// ============================================================================
+// Browse Mode
+// Displays transcript files with pagination and pinning.
+// ============================================================================
 
         tabBrowse.onclick = async () => {
           setMode("browse");
@@ -1639,6 +1725,12 @@
           progressContainer.classList.remove("pulse");
           progressPhase.textContent = "Processing timeout.";
         }
+
+// ============================================================================
+// Upload System
+// Handles audio file upload with progress tracking and processing polling.
+// ============================================================================
+
         async function doUpload() {
           const input = document.getElementById("uploadFiles");
           const status = document.getElementById("uploadStatus");
@@ -1711,7 +1803,12 @@
 
           xhr.send(form);
         }
-        // Theme toggle (persisted)
+
+// ============================================================================
+// Theme Toggle System
+// Persists light/dark theme preference in LocalStorage.
+// ============================================================================
+
         const themeToggle = document.getElementById("themeToggle");
         const THEME_KEY = "strixnote_theme";
 
