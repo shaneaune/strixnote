@@ -44,8 +44,12 @@ INDEX_SEGMENTS = os.environ.get("INDEX_SEGMENTS", "segments")
 
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".webm"}
 
-MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_GB", "2")) * 1024 * 1024 * 1024  # default 2 GiB
-MIN_FREE_BYTES = int(os.environ.get("MIN_FREE_GB", "1")) * 1024 * 1024 * 1024      # default 1 GiB
+MAX_UPLOAD_BYTES = (
+    int(os.environ.get("MAX_UPLOAD_GB", "2")) * 1024 * 1024 * 1024
+)  # default 2 GiB
+MIN_FREE_BYTES = (
+    int(os.environ.get("MIN_FREE_GB", "1")) * 1024 * 1024 * 1024
+)  # default 1 GiB
 
 
 def get_free_bytes(path: str) -> int:
@@ -119,6 +123,7 @@ def _meili_request(method: str, path: str, json_body=None, timeout=5):
         headers["Content-Type"] = "application/json"
     r = requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
     return r
+
 
 def probe_duration_seconds(path: str) -> float:
     try:
@@ -228,6 +233,7 @@ def build_segment_docs(audio_path: Path, vtt_path: Path) -> list[dict]:
         )
     return docs
 
+
 def rebuild_meili_from_processed() -> dict:
     processed_dir = Path(PROCESSED_DIR)
 
@@ -248,7 +254,8 @@ def rebuild_meili_from_processed() -> dict:
         }
 
     audio_files = sorted(
-        p for p in processed_dir.iterdir()
+        p
+        for p in processed_dir.iterdir()
         if p.is_file() and p.suffix.lower() in AUDIO_EXTS
     )
 
@@ -256,11 +263,15 @@ def rebuild_meili_from_processed() -> dict:
 
     # Clear existing docs first
     try:
-        r1 = _meili_request("DELETE", f"/indexes/{INDEX_TRANSCRIPTS}/documents", timeout=30)
+        r1 = _meili_request(
+            "DELETE", f"/indexes/{INDEX_TRANSCRIPTS}/documents", timeout=30
+        )
         if r1.status_code not in (200, 202, 204):
             r1.raise_for_status()
 
-        r2 = _meili_request("DELETE", f"/indexes/{INDEX_SEGMENTS}/documents", timeout=30)
+        r2 = _meili_request(
+            "DELETE", f"/indexes/{INDEX_SEGMENTS}/documents", timeout=30
+        )
         if r2.status_code not in (200, 202, 204):
             r2.raise_for_status()
     except Exception as e:
@@ -277,20 +288,24 @@ def rebuild_meili_from_processed() -> dict:
         vtt_path = processed_dir / f"{audio_path.stem}.vtt"
 
         if not txt_path.exists():
-            summary["skipped_files"].append({
-                "filename": audio_path.name,
-                "reason": "missing txt",
-            })
+            summary["skipped_files"].append(
+                {
+                    "filename": audio_path.name,
+                    "reason": "missing txt",
+                }
+            )
             continue
 
         try:
             file_docs.append(build_file_doc(audio_path, txt_path))
         except Exception as e:
-            summary["errors"].append({
-                "filename": audio_path.name,
-                "stage": "file_doc",
-                "error": str(e),
-            })
+            summary["errors"].append(
+                {
+                    "filename": audio_path.name,
+                    "stage": "file_doc",
+                    "error": str(e),
+                }
+            )
             continue
 
         if vtt_path.exists():
@@ -298,11 +313,13 @@ def rebuild_meili_from_processed() -> dict:
                 docs = build_segment_docs(audio_path, vtt_path)
                 segment_docs.extend(docs)
             except Exception as e:
-                summary["errors"].append({
-                    "filename": audio_path.name,
-                    "stage": "segment_docs",
-                    "error": str(e),
-                })
+                summary["errors"].append(
+                    {
+                        "filename": audio_path.name,
+                        "stage": "segment_docs",
+                        "error": str(e),
+                    }
+                )
         else:
             summary["segment_files_skipped"] += 1
 
@@ -335,6 +352,7 @@ def rebuild_meili_from_processed() -> dict:
         }
 
     return summary
+
 
 def ensure_meili_schema():
     """
@@ -400,7 +418,9 @@ def ensure_meili_schema():
         desired_transcripts = {"filename", "created_at", "recorded_at"}
 
         def ensure_filterables(index_uid: str, desired: set[str]):
-            r = _meili_request("GET", f"/indexes/{index_uid}/settings/filterable-attributes")
+            r = _meili_request(
+                "GET", f"/indexes/{index_uid}/settings/filterable-attributes"
+            )
             r.raise_for_status()
             current = set(r.json() or [])
             missing = sorted(desired - current)
@@ -489,24 +509,30 @@ def upload():
     # Disk space safeguard
     if not has_enough_disk(INCOMING_DIR, MIN_FREE_BYTES):
         free_b = get_free_bytes(INCOMING_DIR)
-        return jsonify(
-            {
-                "error": "server low disk space; upload refused",
-                "free_bytes": free_b,
-                "min_free_bytes": MIN_FREE_BYTES,
-            }
-        ), 507
+        return (
+            jsonify(
+                {
+                    "error": "server low disk space; upload refused",
+                    "free_bytes": free_b,
+                    "min_free_bytes": MIN_FREE_BYTES,
+                }
+            ),
+            507,
+        )
 
     # Request-size safeguard (best-effort; relies on client/NGINX sending Content-Length)
     cl = request.content_length
     if cl is not None and cl > MAX_UPLOAD_BYTES:
-        return jsonify(
-            {
-                "error": "request too large",
-                "content_length": cl,
-                "max_upload_bytes": MAX_UPLOAD_BYTES,
-            }
-        ), 413
+        return (
+            jsonify(
+                {
+                    "error": "request too large",
+                    "content_length": cl,
+                    "max_upload_bytes": MAX_UPLOAD_BYTES,
+                }
+            ),
+            413,
+        )
 
     if "files" not in request.files:
         return jsonify({"error": "missing files field"}), 400
@@ -596,6 +622,7 @@ def meili_search(index: str):
     except Exception as e:
         return jsonify({"error": f"meili proxy failed: {e}"}), 502
 
+
 @app.route(
     "/meili/<path:subpath>",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -635,13 +662,12 @@ def meili_proxy(subpath: str):
 
         # Pass through Meili response (status + content-type + body)
         resp = Response(r.content, status=r.status_code)
-        resp.headers["Content-Type"] = r.headers.get(
-            "Content-Type", "application/json"
-        )
+        resp.headers["Content-Type"] = r.headers.get("Content-Type", "application/json")
         return resp
 
     except Exception as e:
         return jsonify({"error": f"meili proxy failed: {e}"}), 502
+
 
 @app.get("/status")
 def status():
@@ -676,7 +702,7 @@ def status():
     try:
         processed_free_b = get_free_bytes(PROCESSED_DIR)
     except Exception:
-        processed_free_b = None        
+        processed_free_b = None
 
     return jsonify(
         {
@@ -688,7 +714,7 @@ def status():
                 "incoming_free_bytes": incoming_free_b,
                 "processed_free_bytes": processed_free_b,
                 "min_free_bytes": MIN_FREE_BYTES,
-            },            
+            },
             "exists": {
                 "incoming": incoming_path.exists(),
                 "processing": processing_path.exists(),
@@ -848,6 +874,7 @@ def delete():
 
     return jsonify(response), 200
 
+
 @app.post("/reindex")
 def reindex():
     try:
@@ -855,10 +882,16 @@ def reindex():
         status = 200 if result.get("ok") else 500
         return jsonify(result), status
     except Exception as e:
-        return jsonify({
-            "ok": False,
-            "error": f"reindex failed: {e}",
-        }), 500
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": f"reindex failed: {e}",
+                }
+            ),
+            500,
+        )
+
 
 @app.get("/index-health")
 def index_health():
@@ -866,6 +899,9 @@ def index_health():
         "ok": True,
         "meili": {
             "reachable": False,
+        },
+        "storage": {
+            "processed_audio_files": 0,
         },
         "indexes": {
             "files": {
@@ -879,7 +915,22 @@ def index_health():
                 "count": None,
             },
         },
+        "warnings": {
+            "files_index_mismatch": False,
+        },
     }
+
+    try:
+        processed_dir = Path(PROCESSED_DIR)
+        if processed_dir.exists():
+            summary["storage"]["processed_audio_files"] = sum(
+                1
+                for p in processed_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in AUDIO_EXTS
+            )
+    except Exception as e:
+        summary["ok"] = False
+        summary["storage"]["error"] = str(e)
 
     try:
         r = _meili_request("GET", "/health", timeout=5)
@@ -914,11 +965,17 @@ def index_health():
     try:
         summary["indexes"]["files"] = inspect_index(INDEX_TRANSCRIPTS)
         summary["indexes"]["segments"] = inspect_index(INDEX_SEGMENTS)
+        files_count = summary["indexes"]["files"].get("count")
+        processed_count = summary["storage"].get("processed_audio_files")
+
+        if files_count is not None and processed_count is not None:
+            summary["warnings"]["files_index_mismatch"] = files_count != processed_count
     except Exception as e:
         summary["ok"] = False
         summary["error"] = str(e)
 
     return jsonify(summary), 200
+
 
 # -----------------------------
 # Settings (persisted JSON)
@@ -929,13 +986,13 @@ SETTINGS_PATH = os.path.join(SETTINGS_DIR, "settings.json")
 
 DEFAULT_SETTINGS = {
     "whisper": {
-        "language": "",       # "" = auto
-        "beam_size": 5,       # int
+        "language": "",  # "" = auto
+        "beam_size": 5,  # int
         "vad_filter": False,  # bool
     },
     "meili": {
         "typo_tolerance": True,  # bool
-        "synonyms": {},          # dict[str, list[str]]
+        "synonyms": {},  # dict[str, list[str]]
     },
 }
 
@@ -957,6 +1014,7 @@ def load_settings() -> dict:
                 data = f.read().strip()
             if data:
                 import json
+
                 return json.loads(data)
     except Exception as e:
         print("Settings load error:", str(e), flush=True)
@@ -1051,12 +1109,14 @@ def validate_settings(raw: dict) -> dict:
 
 def save_settings(settings: dict) -> None:
     import json
+
     os.makedirs(SETTINGS_DIR, exist_ok=True)
     tmp = SETTINGS_PATH + ".tmp"
     payload = json.dumps(settings, indent=2, sort_keys=True)
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(payload + "\n")
     os.replace(tmp, SETTINGS_PATH)
+
 
 def apply_meili_settings(meili_cfg: dict) -> dict:
     """
@@ -1068,7 +1128,9 @@ def apply_meili_settings(meili_cfg: dict) -> dict:
 
     meili_cfg = meili_cfg or {}
     typo_enabled = bool(meili_cfg.get("typo_tolerance", True))
-    synonyms = meili_cfg.get("synonyms") if isinstance(meili_cfg.get("synonyms"), dict) else {}
+    synonyms = (
+        meili_cfg.get("synonyms") if isinstance(meili_cfg.get("synonyms"), dict) else {}
+    )
 
     payload = {
         "typoTolerance": {"enabled": typo_enabled},
@@ -1080,7 +1142,9 @@ def apply_meili_settings(meili_cfg: dict) -> dict:
 
     for idx in (INDEX_TRANSCRIPTS, INDEX_SEGMENTS):
         try:
-            r = _meili_request("PATCH", f"/indexes/{idx}/settings", json_body=payload, timeout=10)
+            r = _meili_request(
+                "PATCH", f"/indexes/{idx}/settings", json_body=payload, timeout=10
+            )
             r.raise_for_status()
             j = r.json() if r.content else {}
             results[idx] = j
@@ -1096,7 +1160,13 @@ def apply_meili_settings(meili_cfg: dict) -> dict:
             applied_all = False
             results[idx] = {"error": str(e)}
 
-    return {"ok": applied_all, "applied": applied_all, "payload": payload, "results": results}
+    return {
+        "ok": applied_all,
+        "applied": applied_all,
+        "payload": payload,
+        "results": results,
+    }
+
 
 @app.get("/settings")
 def get_settings():
@@ -1113,7 +1183,9 @@ def put_settings():
         return jsonify({"ok": False, "error": "invalid JSON"}), 400
 
     # Accept either {"settings": {...}} or just {...}
-    raw = body.get("settings") if isinstance(body, dict) and "settings" in body else body
+    raw = (
+        body.get("settings") if isinstance(body, dict) and "settings" in body else body
+    )
     if not isinstance(raw, dict):
         return jsonify({"ok": False, "error": "settings must be an object"}), 400
 
@@ -1122,8 +1194,7 @@ def put_settings():
         save_settings(cleaned)
     except Exception as e:
         return jsonify({"ok": False, "error": f"failed to save settings: {e}"}), 500
-    
+
     meili_apply = apply_meili_settings(cleaned.get("meili") or {})
-        
 
     return jsonify({"ok": True, "settings": cleaned, "meili": meili_apply})

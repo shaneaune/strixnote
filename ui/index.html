@@ -393,6 +393,7 @@ Major UI Systems
         const reindexBtn = document.getElementById("reindexBtn");
         const reindexStatus = document.getElementById("reindexStatus");
 
+
         async function loadIndexHealth() {
           if (!indexHealthBox) return;
 
@@ -410,10 +411,29 @@ Major UI Systems
             const files = data?.indexes?.files || {};
             const segments = data?.indexes?.segments || {};
 
+            const processedCount = data?.storage?.processed_audio_files ?? 0;
+            const filesMismatch = !!data?.warnings?.files_index_mismatch;
+
+            if (reindexBtn) {
+              if (filesMismatch) {
+                reindexBtn.style.border = "2px solid #e5533d";
+                reindexBtn.style.color = "#e5533d";
+                reindexBtn.title = "Index mismatch detected — reindex recommended";
+              } else {
+                reindexBtn.style.border = "";
+                reindexBtn.style.color = "";
+                reindexBtn.title = "";
+              }
+            }
+
             indexHealthBox.innerHTML = `
               <div>MeiliSearch: ${meiliOk ? "OK" : "Unavailable"}</div>
+              <div>Processed audio files: ${processedCount}</div>
               <div>Files index: ${files.exists ? `${files.count ?? 0} documents` : "Missing"}</div>
               <div>Segments index: ${segments.exists ? `${segments.count ?? 0} segments` : "Missing"}</div>
+              <div style="${filesMismatch ? 'color:#e5533d; font-weight:600;' : ''}">
+                Files index match: ${filesMismatch ? "WARNING - index count does not match processed files" : "OK"}
+              </div>
             `;
           } catch (e) {
             indexHealthBox.innerHTML = `
@@ -1134,7 +1154,7 @@ Major UI Systems
 
               div.innerHTML = `
         <div class="file">${hit.filename}</div>
-        <div class="time">@ ${msToHMS(hit.start_ms)}</div>
+        <div class="time" style="font-weight:600;">Time: ${msToHMS(hit.start_ms)}</div>
         <div class="dt">${epochToLocal(hit.created_at)}</div>
         <div class="snippet">${hit._formatted?.text || hit.text}</div>
       `;
