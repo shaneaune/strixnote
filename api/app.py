@@ -859,7 +859,67 @@ def reindex():
             "ok": False,
             "error": f"reindex failed: {e}",
         }), 500
-    
+
+@app.get("/index-health")
+def index_health():
+    summary = {
+        "ok": True,
+        "meili": {
+            "reachable": False,
+        },
+        "indexes": {
+            "files": {
+                "uid": INDEX_TRANSCRIPTS,
+                "exists": False,
+                "count": None,
+            },
+            "segments": {
+                "uid": INDEX_SEGMENTS,
+                "exists": False,
+                "count": None,
+            },
+        },
+    }
+
+    try:
+        r = _meili_request("GET", "/health", timeout=5)
+        r.raise_for_status()
+        summary["meili"]["reachable"] = True
+    except Exception as e:
+        summary["ok"] = False
+        summary["meili"]["error"] = str(e)
+        return jsonify(summary), 200
+
+    def inspect_index(uid: str) -> dict:
+        info = {
+            "uid": uid,
+            "exists": False,
+            "count": None,
+        }
+
+        r = _meili_request("GET", f"/indexes/{uid}", timeout=5)
+        if r.status_code == 404:
+            return info
+        r.raise_for_status()
+
+        info["exists"] = True
+
+        c = _meili_request("GET", f"/indexes/{uid}/stats", timeout=5)
+        c.raise_for_status()
+        stats = c.json() or {}
+        info["count"] = stats.get("numberOfDocuments")
+
+        return info
+
+    try:
+        summary["indexes"]["files"] = inspect_index(INDEX_TRANSCRIPTS)
+        summary["indexes"]["segments"] = inspect_index(INDEX_SEGMENTS)
+    except Exception as e:
+        summary["ok"] = False
+        summary["error"] = str(e)
+
+    return jsonify(summary), 200
+
 # -----------------------------
 # Settings (persisted JSON)
 # -----------------------------
