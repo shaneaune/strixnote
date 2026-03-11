@@ -257,6 +257,8 @@ Major UI Systems
         </select>
       </div>
 
+      <div id="searchStatus" class="small muted" style="margin:8px 2px 6px 2px;"></div>
+
       <div id="results"></div>
 
       <div id="emptyState" class="small muted" style="display:none; padding:20px; text-align:center;">
@@ -287,6 +289,7 @@ Major UI Systems
         const playerPanel = document.getElementById("playerPanel");
         const captionBox = document.getElementById("captionBox");
         const resultsDiv = document.getElementById("results");
+        const searchStatus = document.getElementById("searchStatus");
         const browseSortBar = document.getElementById("browseSortBar");
         const searchBox = document.getElementById("searchBox");
         const searchMode = document.getElementById("searchMode");
@@ -329,6 +332,7 @@ Major UI Systems
             browsePager.style.display = "none";
             if (browseSortBar) browseSortBar.style.display = "none";
             if (searchSortBar) searchSortBar.style.display = "none";
+            if (searchStatus) searchStatus.textContent = "";
             return;
           }
 
@@ -339,6 +343,7 @@ Major UI Systems
             browsePager.style.display = "flex";
             if (browseSortBar) browseSortBar.style.display = "flex";
             if (searchSortBar) searchSortBar.style.display = "none";
+            if (searchStatus) searchStatus.textContent = "";
 
             // Reset Search tab mode when leaving it (Browse should default back to Files)
             searchModeValue = "files";
@@ -363,6 +368,7 @@ Major UI Systems
           playerPanel.style.display = "block";
           if (browseSortBar) browseSortBar.style.display = "none";
           if (searchSortBar) searchSortBar.style.display = "none";
+          if (searchStatus) searchStatus.textContent = "";
 
           // Entering Search: clear any Browse-rendered list so Search starts clean
           resultsDiv.innerHTML = "";
@@ -1004,10 +1010,22 @@ Major UI Systems
             browsePager.style.display = "none";
             pagerInfo.textContent = "";
             if (searchSortBar) searchSortBar.style.display = "none";
+            if (searchStatus) searchStatus.textContent = "";
+            if (searchStatus) searchStatus.textContent = isFiles ? "Files results: 0" : "Segment results: 0";
             return;
           }
 
           if (searchSortBar) searchSortBar.style.display = isFiles ? "flex" : "none";
+
+          if (searchStatus) {
+            const total = data.estimatedTotalHits ?? data.hits.length ?? 0;
+            if (isFiles) {
+              const sortLabel = (searchSortOrder?.value || "desc") === "asc" ? "oldest first" : "newest first";
+              searchStatus.textContent = `Files results: ${total} • Sorted: ${sortLabel}`;
+            } else {
+              searchStatus.textContent = `Segment results: ${total}`;
+            }
+          }
 
           (data.hits || []).forEach(hit => {
             const div = document.createElement("div");
