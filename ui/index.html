@@ -1039,11 +1039,14 @@ Major UI Systems
 
           if (searchStatus) {
             const total = data.estimatedTotalHits ?? data.hits.length ?? 0;
+            const start = total === 0 ? 0 : searchOffset + 1;
+            const end = Math.min(searchOffset + (data.hits?.length || 0), total);
+
             if (isFiles) {
               const sortLabel = (searchSortOrder?.value || "desc") === "asc" ? "oldest first" : "newest first";
-              searchStatus.textContent = `Files results: ${total} • Sorted: ${sortLabel}`;
+              searchStatus.textContent = `Files results: ${total} • Showing ${start}-${end} • Sorted: ${sortLabel}`;
             } else {
-              searchStatus.textContent = `Segment results: ${total}`;
+              searchStatus.textContent = `Segment results: ${total} • Showing ${start}-${end}`;
             }
           }
 
@@ -1055,7 +1058,7 @@ Major UI Systems
               div.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <div>
-        <div class="file">${hit.filename} <span class="procBadge small muted"></span></div>
+        <div class="file" title="${hit.filename}">${hit.filename} <span class="procBadge small muted"></span></div>
         <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
@@ -1153,7 +1156,7 @@ Major UI Systems
             } else {
 
               div.innerHTML = `
-          <div class="file">${hit.filename}</div>
+          <div class="file" title="${hit.filename}">${hit.filename}</div>
           <div style="display:flex; gap:12px; align-items:center; margin-top:4px;">
             <div class="time" style="font-weight:600; min-width:120px;">Time: ${msToHMS(hit.start_ms)}</div>
             <div class="dt">${epochToLocal(hit.created_at)}</div>
@@ -1297,7 +1300,7 @@ Major UI Systems
             div.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <div>
-        <div class="file">${hit.filename} <span class="procBadge small muted"></span></div>
+        <div class="file" title="${hit.filename}">${hit.filename} <span class="procBadge small muted"></span></div>
         <div class="dt">${epochToLocal(hit.created_at)}${formatMeta(hit)}</div>
       </div>
           <div style="display:flex; gap:8px; align-items:center;">

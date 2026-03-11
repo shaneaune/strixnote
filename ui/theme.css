@@ -225,14 +225,20 @@ a.btn {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .result:hover {
   border-color: rgba(91, 63, 214, 0.6);
+  background: var(--color-surface-elevated);
+  transform: translateY(-1px);
 }
 
 .file {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dt,
@@ -244,7 +250,8 @@ a.btn {
 .snippet {
   margin-top: 8px;
   color: var(--color-text-muted);
-  line-height: 1.4;
+  line-height: 1.55;
+  word-break: break-word;
 }
 
 /* Highlight */
