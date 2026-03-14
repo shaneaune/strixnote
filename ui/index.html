@@ -614,6 +614,83 @@ Major UI Systems
           return out.join("\n");
         }
 
+        function parseVttSegmentsForTranscript(vtt) {
+          const lines = String(vtt || "").replace(/\r/g, "").split("\n");
+          const out = [];
+          let i = 0;
+
+          while (i < lines.length) {
+            const line = lines[i].trim();
+
+            if (line.includes("-->")) {
+              const startStr = line.split("-->")[0].trim();
+              const startSec = vttTimeToSeconds(startStr);
+
+              i++;
+              const textLines = [];
+              while (i < lines.length && lines[i].trim() !== "") {
+                const t = lines[i].trim();
+                if (t && !t.startsWith("NOTE")) textLines.push(t);
+                i++;
+              }
+
+              const txt = textLines.join(" ").trim();
+              if (txt) {
+                out.push({
+                  startSec,
+                  startLabel: secondsToHMS(startSec),
+                  text: txt,
+                });
+              }
+            } else {
+              i++;
+            }
+          }
+
+          return out;
+        }
+
+        async function fetchTranscriptVtt(base) {
+          const r = await fetch("/audio/" + encodeURIComponent(base + ".vtt"));
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return await r.text();
+        }
+
+        function renderTranscriptSegments(transcriptBox, segments, filename) {
+          transcriptBox.innerHTML = "";
+
+          segments.forEach(seg => {
+            const row = document.createElement("div");
+            row.className = "transcriptSeg";
+            row.dataset.startSec = seg.startSec;
+            row.style.cursor = "pointer";
+
+            row.addEventListener("click", (e) => {
+              e.stopPropagation();
+
+              if (currentFile === filename && player.src) {
+                player.currentTime = seg.startSec;
+                player.play().catch(() => { });
+              } else {
+                loadFile(filename, seg.startSec * 1000);
+              }
+            });
+
+            const ts = document.createElement("span");
+            ts.className = "transcriptTs";
+            ts.textContent = seg.startLabel;
+
+            const text = document.createElement("span");
+            text.className = "transcriptText";
+            text.textContent = "  " + seg.text;
+
+            row.appendChild(ts);
+            row.appendChild(text);
+
+            transcriptBox.appendChild(row);
+          });
+        }
+
         async function fetchTranscriptText(base, wantTs, emptyFallback = "") {
           if (!wantTs) {
             const r = await fetch("/audio/" + encodeURIComponent(base + ".txt"));
@@ -680,7 +757,22 @@ Major UI Systems
           const renderTranscript = async () => {
             const base = baseName(filename || "");
             const wantTs = !!(tsToggle && tsToggle.checked);
-            transcriptBox.textContent = await fetchTranscriptText(base, wantTs, "(empty)");
+
+            if (!wantTs) {
+              transcriptBox.textContent =
+                await fetchTranscriptText(base, false, "(empty)");
+              return;
+            }
+
+            const vtt = await fetchTranscriptVtt(base);
+            const segments = parseVttSegmentsForTranscript(vtt);
+
+            if (!segments.length) {
+              transcriptBox.textContent = "(empty)";
+              return;
+            }
+
+            renderTranscriptSegments(transcriptBox, segments, filename);
           };
 
           if (dlBtn && !dlBtn.dataset.wired) {
@@ -843,8 +935,13 @@ Major UI Systems
           tt.mode = "hidden";
           tt.addEventListener("cuechange", () => {
             const cues = tt.activeCues;
-            if (!cues || !cues.length) { captionBox.textContent = ""; return; }
-            captionBox.textContent = Array.from(cues).map(c => c.text).join("\n");
+            if (!cues || !cues.length) {
+              captionBox.textContent = "";
+              return;
+            }
+
+            const lastCue = cues[cues.length - 1];
+            captionBox.textContent = lastCue?.text || "";
           });
         }
         function escapeHtml(str) {

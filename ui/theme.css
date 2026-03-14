@@ -247,6 +247,26 @@ a.btn {
   color: var(--color-text-muted);
 }
 
+.transcriptSeg {
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background 120ms ease;
+}
+
+.transcriptSeg:hover {
+  background: rgba(91, 63, 214, 0.12);
+}
+
+.transcriptTs {
+  color: var(--color-text-muted);
+  margin-right: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.transcriptText {
+  color: var(--color-text);
+}
+
 .snippet {
   margin-top: 8px;
   color: var(--color-text-muted);
