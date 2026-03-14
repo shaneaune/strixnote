@@ -662,7 +662,7 @@ Major UI Systems
           segments.forEach(seg => {
             const row = document.createElement("div");
             row.className = "transcriptSeg";
-            row.dataset.startSec = seg.startSec;
+            row.dataset.startSec = String(Math.floor(seg.startSec));
             row.style.cursor = "pointer";
 
             row.addEventListener("click", (e) => {
@@ -933,8 +933,14 @@ Major UI Systems
           const tt = player.textTracks[0];
           if (!tt) return;
           tt.mode = "hidden";
+
           tt.addEventListener("cuechange", () => {
             const cues = tt.activeCues;
+
+            document.querySelectorAll(".transcriptSeg.active").forEach(el => {
+              el.classList.remove("active");
+            });
+
             if (!cues || !cues.length) {
               captionBox.textContent = "";
               return;
@@ -942,6 +948,13 @@ Major UI Systems
 
             const lastCue = cues[cues.length - 1];
             captionBox.textContent = lastCue?.text || "";
+
+            const startSec = Math.floor(lastCue?.startTime || 0);
+            const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${startSec}"]`);
+            if (activeRow) {
+              activeRow.classList.add("active");
+              activeRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
           });
         }
         function escapeHtml(str) {

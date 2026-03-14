@@ -257,6 +257,12 @@ a.btn {
   background: rgba(91, 63, 214, 0.12);
 }
 
+.transcriptSeg.active {
+  background: rgba(91, 63, 214, 0.22);
+  border-left: 3px solid var(--color-primary);
+  padding-left: 8px;
+}
+
 .transcriptTs {
   color: var(--color-text-muted);
   margin-right: 6px;
