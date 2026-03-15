@@ -1169,7 +1169,11 @@ Major UI Systems
           currentFile = filename;
           resetPlayer();
 
-          if (previousFile !== filename) {
+          const openTranscriptForFile = document.querySelector(
+            `.result .btn-text[data-fn="${filename}"]`
+          )?.closest(".result")?.querySelector(".transcriptWrap.open");
+
+          if (previousFile !== filename && !openTranscriptForFile) {
             if (segmentTimelineWrap) segmentTimelineWrap.style.display = "none";
             if (segmentTimeline) segmentTimeline.innerHTML = "";
             currentTimelineSegments = [];
