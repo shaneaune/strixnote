@@ -658,15 +658,59 @@ Major UI Systems
 
         function renderTranscriptSegments(transcriptBox, segments, filename) {
           transcriptBox.innerHTML = "";
+          transcriptBox.focus();
+
+          let selectedIndex = -1;
+          const rows = [];
+
+          function selectRow(i) {
+            if (rows[selectedIndex]) rows[selectedIndex].classList.remove("selected");
+            selectedIndex = i;
+            if (rows[selectedIndex]) {
+              rows[selectedIndex].classList.add("selected");
+              rows[selectedIndex].scrollIntoView({ block: "center", behavior: "smooth" });
+            }
+          }
+
+          transcriptBox.onkeydown = (e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              if (selectedIndex < rows.length - 1) selectRow(selectedIndex + 1);
+            }
+
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              if (selectedIndex > 0) selectRow(selectedIndex - 1);
+            }
+
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              const r = rows[selectedIndex];
+              if (!r) return;
+
+              const sec = Number(r.dataset.startSec || 0);
+
+              if (currentFile === filename && player.src) {
+                player.currentTime = sec;
+                player.play().catch(() => { });
+              } else {
+                loadFile(filename, sec * 1000);
+              }
+            }
+          };
 
           segments.forEach(seg => {
             const row = document.createElement("div");
+            rows.push(row);
             row.className = "transcriptSeg";
             row.dataset.startSec = String(Math.floor(seg.startSec));
             row.style.cursor = "pointer";
 
             row.addEventListener("click", (e) => {
               e.stopPropagation();
+
+              selectRow(rows.indexOf(row));
+              transcriptBox.focus();
 
               if (currentFile === filename && player.src) {
                 player.currentTime = seg.startSec;
@@ -953,7 +997,7 @@ Major UI Systems
             const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${startSec}"]`);
             if (activeRow) {
               activeRow.classList.add("active");
-              activeRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              activeRow.scrollIntoView({ block: "center", behavior: "smooth" });
             }
           });
         }
@@ -1218,7 +1262,7 @@ Major UI Systems
               </label>
             </div>
           </div>
-      <div class="transcriptBox"
+      <div class="transcriptBox" tabindex="0"
      style="max-height:16em; overflow:auto; padding:12px 14px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface-elevated); white-space:pre-wrap; line-height:1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;">
         </div>
       </div>
@@ -1467,7 +1511,7 @@ Major UI Systems
                 </label>
               </div>
             </div>
- <div class="transcriptBox"
+ <div class="transcriptBox" tabindex="0"
      style="max-height:16em; overflow:auto; padding:12px 14px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface-elevated); white-space:pre-wrap; line-height:1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;">
           </div>
       </div>

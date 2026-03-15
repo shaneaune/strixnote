@@ -263,6 +263,11 @@ a.btn {
   padding-left: 8px;
 }
 
+.transcriptSeg.selected {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .transcriptTs {
   color: var(--color-text-muted);
   margin-right: 6px;
