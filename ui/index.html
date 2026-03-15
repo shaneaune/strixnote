@@ -111,9 +111,9 @@ Major UI Systems
         <div id="uploadPhase" class="small muted" style="margin-top:6px;"></div>
       </div>
       <div class="tabs">
-        <div class="tab active" id="tabSearch">Search</div>
-        <div class="tab" id="tabBrowse">Browse</div>
-        <div class="tab" id="tabSettings">Settings</div>
+        <div class="tab active" id="tabBrowse">Browse</div>
+        <div class="tab" id="tabSearch">Search</div>
+        <div class="tab" id="tabSearch">Search</div>
       </div>
 
       <div id="searchWrap" style="display:flex; flex-direction:column; gap:10px;">
@@ -2133,6 +2133,10 @@ Major UI Systems
             await performSearch();
           }
         };
+
+        (async () => {
+          await tabBrowse.onclick();
+        })();
 
       </script>
 
