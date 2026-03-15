@@ -237,6 +237,10 @@ Major UI Systems
 
         <audio id="player" controls preload="metadata"></audio>
         <div id="captionBox" class="captionBox"></div>
+        <div id="segmentTimelineWrap" style="margin-top:10px; display:none;">
+          <div class="small muted" style="margin-bottom:6px;">Timeline</div>
+          <div id="segmentTimeline"></div>
+        </div>
       </div>
       <div id="playerHomeAnchor"></div>
 
@@ -290,6 +294,8 @@ Major UI Systems
         const playerPanel = document.getElementById("playerPanel");
         const playerHomeAnchor = document.getElementById("playerHomeAnchor");
         const captionBox = document.getElementById("captionBox");
+        const segmentTimelineWrap = document.getElementById("segmentTimelineWrap");
+        const segmentTimeline = document.getElementById("segmentTimeline");
         const resultsDiv = document.getElementById("results");
         const searchStatus = document.getElementById("searchStatus");
         const browseSortBar = document.getElementById("browseSortBar");
@@ -520,6 +526,8 @@ Major UI Systems
         let searchModeValue = "segments";
         const SEARCH_MODE_KEY = "strixnote_search_mode";
         let currentFile = null;
+        let currentTimelineSegments = [];
+        let currentTimelineFilename = "";
         const browseLimit = 20;
 
         try {
@@ -658,6 +666,51 @@ Major UI Systems
           const r = await fetch("/audio/" + encodeURIComponent(base + ".vtt"));
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return await r.text();
+        }
+
+        function renderSegmentTimeline(segments, filename) {
+
+          if (!segmentTimelineWrap || !segmentTimeline) return;
+
+          segmentTimeline.innerHTML = "";
+
+          if (!segments || !segments.length) {
+            segmentTimelineWrap.style.display = "none";
+            return;
+          }
+
+          segmentTimelineWrap.style.display = "block";
+
+          const dur = player?.duration || 0;
+          if (!dur) {
+            segmentTimelineWrap.style.display = "block";
+            return;
+          }
+
+          segments.forEach(seg => {
+
+            const marker = document.createElement("div");
+            marker.className = "timelineMarker";
+
+            const pct = (seg.startSec / dur) * 100;
+            marker.style.left = pct + "%";
+
+            marker.title = seg.startLabel;
+
+            marker.addEventListener("click", (e) => {
+              e.stopPropagation();
+
+              if (currentFile === filename && player.src) {
+                player.currentTime = seg.startSec;
+                player.play().catch(() => { });
+              } else {
+                loadFile(filename, seg.startSec * 1000);
+              }
+            });
+
+            segmentTimeline.appendChild(marker);
+
+          });
         }
 
         function renderTranscriptSegments(transcriptBox, segments, filename) {
@@ -843,7 +896,9 @@ Major UI Systems
               transcriptBox.textContent = "(empty)";
               return;
             }
-
+            currentTimelineSegments = segments;
+            currentTimelineFilename = filename;
+            renderSegmentTimeline(segments, filename);
             renderTranscriptSegments(transcriptBox, segments, filename);
           };
 
@@ -1059,8 +1114,16 @@ Major UI Systems
         }
 
         function loadFile(filename, startMs = 0) {
+          const previousFile = currentFile;
           currentFile = filename;
           resetPlayer();
+
+          if (previousFile !== filename) {
+            if (segmentTimelineWrap) segmentTimelineWrap.style.display = "none";
+            if (segmentTimeline) segmentTimeline.innerHTML = "";
+            currentTimelineSegments = [];
+            currentTimelineFilename = "";
+          }
 
           // close any open transcript panels for other files
           document.querySelectorAll(".transcriptWrap.open").forEach(w => {
@@ -1095,6 +1158,10 @@ Major UI Systems
           player.load();
 
           player.addEventListener("loadedmetadata", () => {
+            if (currentTimelineSegments.length) {
+              renderSegmentTimeline(currentTimelineSegments, currentFile || filename);
+            }
+
             player.currentTime = startMs / 1000;
             player.play().catch(() => { });
           }, { once: true });
