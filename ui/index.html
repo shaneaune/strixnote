@@ -369,6 +369,7 @@ Major UI Systems
           searchWrap.style.display = "block";
           settingsWrap.style.display = "none";
           playerPanel.style.display = "block";
+          placePlayerAboveRow(null);
           if (browseSortBar) browseSortBar.style.display = "none";
           if (searchSortBar) searchSortBar.style.display = "none";
           if (searchStatus) searchStatus.textContent = "";
@@ -1328,6 +1329,7 @@ Major UI Systems
               // click anywhere except buttons/links -> play
               div.onclick = (e) => {
                 if (e.target.closest("a") || e.target.closest("button") || e.target.closest("input") || e.target.closest("label")) return;
+                placePlayerAboveRow(div);
                 loadFile(hit.filename, 0);
               };
 
