@@ -800,7 +800,7 @@ Major UI Systems
 
           const renderTranscript = async () => {
             const base = baseName(filename || "");
-            const wantTs = !!(tsToggle && tsToggle.checked);
+            const wantTs = !(tsToggle && tsToggle.checked);
 
             if (!wantTs) {
               transcriptBox.textContent =
@@ -826,7 +826,7 @@ Major UI Systems
 
               try {
                 const base = baseName(filename || "");
-                const wantTs = !!(tsToggle && tsToggle.checked);
+                const wantTs = !(tsToggle && tsToggle.checked);
                 await downloadTranscriptFile(base, wantTs);
               } catch (err) {
                 alert("Download failed: " + (err?.message || err));
@@ -1257,8 +1257,8 @@ Major UI Systems
                 Download
               </button>
               <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
-                <input type="checkbox" class="tsToggle">
-                Timestamps
+                 <input type="checkbox" class="tsToggle">
+                  No Timestamps
               </label>
             </div>
           </div>
@@ -1505,10 +1505,10 @@ Major UI Systems
                   style="height:32px; display:inline-flex; align-items:center;">
                   Download
                 </button>
-                <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
-                  <input type="checkbox" class="tsToggle">
-                  Timestamps
-                </label>
+               <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+                <input type="checkbox" class="tsToggle">
+                No Timestamps
+               </label>
               </div>
             </div>
  <div class="transcriptBox" tabindex="0"
@@ -1588,7 +1588,7 @@ Major UI Systems
                 try {
                   const fn = dlBtn.getAttribute("data-fn") || "";
                   const base = baseName(fn);
-                  const wantTs = !!(tsToggle && tsToggle.checked);
+                  const wantTs = !(tsToggle && tsToggle.checked);
                   await downloadTranscriptFile(base, wantTs);
                 } catch (err) {
                   alert("Download failed: " + (err?.message || err));
