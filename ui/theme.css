@@ -278,6 +278,18 @@ a.btn {
   color: var(--color-text);
 }
 
+.transcriptCopy {
+  float: right;
+  opacity: 0.45;
+  cursor: pointer;
+  user-select: none;
+}
+
+.transcriptSeg:hover .transcriptCopy,
+.transcriptSeg.selected .transcriptCopy {
+  opacity: 1;
+}
+
 #segmentTimeline {
   position: relative;
   height: 18px;
@@ -300,6 +312,12 @@ a.btn {
 
 .timelineMarker:hover {
   background: var(--color-primary);
+}
+
+.timelineMarker.active {
+  background: var(--color-primary);
+  height: 16px;
+  top: 1px;
 }
 
 .snippet {

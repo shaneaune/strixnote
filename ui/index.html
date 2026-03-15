@@ -691,6 +691,7 @@ Major UI Systems
 
             const marker = document.createElement("div");
             marker.className = "timelineMarker";
+            marker.dataset.startSec = Math.floor(seg.startSec);
 
             const pct = (seg.startSec / dur) * 100;
             marker.style.left = pct + "%";
@@ -809,8 +810,38 @@ Major UI Systems
             text.className = "transcriptText";
             text.textContent = "  " + seg.text;
 
+            const copy = document.createElement("span");
+            copy.className = "transcriptCopy";
+            copy.title = "Copy segment";
+            copy.textContent = "📋";
+
+            copy.addEventListener("click", async (e) => {
+              e.stopPropagation();
+
+              const line = `${seg.startLabel}  ${seg.text}`;
+
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  await navigator.clipboard.writeText(line);
+                } else {
+                  const ta = document.createElement("textarea");
+                  ta.value = line;
+                  ta.setAttribute("readonly", "");
+                  ta.style.position = "absolute";
+                  ta.style.left = "-9999px";
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  ta.remove();
+                }
+              } catch (err) {
+                console.warn("Copy failed", err);
+              }
+            });
+
             row.appendChild(ts);
             row.appendChild(text);
+            row.appendChild(copy);
 
             transcriptBox.appendChild(row);
           });
@@ -1076,6 +1107,10 @@ Major UI Systems
             const lastCue = cues[cues.length - 1];
             captionBox.textContent = lastCue?.text || "";
 
+            document.querySelectorAll(".timelineMarker.active").forEach(el => {
+              el.classList.remove("active");
+            });
+
             const startSec = Math.floor(lastCue?.startTime || 0);
             const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${startSec}"]`);
             if (activeRow) {
@@ -1092,6 +1127,11 @@ Major UI Systems
                   behavior: "smooth"
                 });
               }
+            }
+
+            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${startSec}"]`);
+            if (activeMarker) {
+              activeMarker.classList.add("active");
             }
           });
         }
