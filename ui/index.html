@@ -1118,14 +1118,12 @@ Major UI Systems
 
               const box = activeRow.closest(".transcriptBox");
               if (box) {
-                const rowTop = activeRow.offsetTop;
-                const rowHeight = activeRow.offsetHeight;
-                const targetTop = rowTop - (box.clientHeight / 2) + (rowHeight / 2);
+                const boxRect = box.getBoundingClientRect();
+                const rowRect = activeRow.getBoundingClientRect();
+                const rowTopInBox = rowRect.top - boxRect.top + box.scrollTop;
+                const targetTop = rowTopInBox - (box.clientHeight / 2) + (rowRect.height / 2);
 
-                box.scrollTo({
-                  top: Math.max(0, targetTop),
-                  behavior: "smooth"
-                });
+                box.scrollTop = Math.max(0, targetTop);
               }
             }
 
