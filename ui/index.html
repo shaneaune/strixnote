@@ -238,6 +238,7 @@ Major UI Systems
         <audio id="player" controls preload="metadata"></audio>
         <div id="captionBox" class="captionBox"></div>
       </div>
+      <div id="playerHomeAnchor"></div>
 
       <div id="browseSortBar" class="row" style="display:none; gap:10px; align-items:center; margin-top:10px;">
         <div class="small muted">Sort</div>
@@ -287,6 +288,7 @@ Major UI Systems
 
         const player = document.getElementById("player");
         const playerPanel = document.getElementById("playerPanel");
+        const playerHomeAnchor = document.getElementById("playerHomeAnchor");
         const captionBox = document.getElementById("captionBox");
         const resultsDiv = document.getElementById("results");
         const searchStatus = document.getElementById("searchStatus");
@@ -340,6 +342,7 @@ Major UI Systems
             searchWrap.style.display = "none";
             settingsWrap.style.display = "none";
             playerPanel.style.display = "block";
+            placePlayerAboveRow(null);
             browsePager.style.display = "flex";
             if (browseSortBar) browseSortBar.style.display = "flex";
             if (searchSortBar) searchSortBar.style.display = "none";
@@ -662,6 +665,7 @@ Major UI Systems
 
           let selectedIndex = -1;
           const rows = [];
+          const hostRow = transcriptBox.closest(".result");
 
           function selectRow(i) {
             if (rows[selectedIndex]) rows[selectedIndex].classList.remove("selected");
@@ -673,6 +677,12 @@ Major UI Systems
           }
 
           transcriptBox.onkeydown = (e) => {
+
+            if (e.key === " ") {
+              e.preventDefault();
+              return;
+            }
+
             if (e.key === "ArrowDown") {
               e.preventDefault();
               if (selectedIndex < rows.length - 1) selectRow(selectedIndex + 1);
@@ -683,12 +693,14 @@ Major UI Systems
               if (selectedIndex > 0) selectRow(selectedIndex - 1);
             }
 
-            if (e.key === "Enter" || e.key === " ") {
+            if (e.key === "Enter") {
               e.preventDefault();
               const r = rows[selectedIndex];
               if (!r) return;
 
               const sec = Number(r.dataset.startSec || 0);
+
+              placePlayerAboveRow(hostRow);
 
               if (currentFile === filename && player.src) {
                 player.currentTime = sec;
@@ -698,6 +710,19 @@ Major UI Systems
               }
             }
           };
+
+          if (!window.__strixTranscriptSpaceBlocker) {
+            window.__strixTranscriptSpaceBlocker = true;
+
+            document.addEventListener("keydown", (e) => {
+              if (e.key !== " ") return;
+
+              const active = document.activeElement;
+              if (active && active.classList && active.classList.contains("transcriptBox")) {
+                e.preventDefault();
+              }
+            });
+          }
 
           segments.forEach(seg => {
             const row = document.createElement("div");
@@ -711,6 +736,8 @@ Major UI Systems
 
               selectRow(rows.indexOf(row));
               transcriptBox.focus();
+
+              placePlayerAboveRow(hostRow);
 
               if (currentFile === filename && player.src) {
                 player.currentTime = seg.startSec;
@@ -1016,9 +1043,39 @@ Major UI Systems
         // Handles playback loading, subtitle tracks, and caption rendering.
         // ============================================================================
 
+        function placePlayerAboveRow(row) {
+          if (!playerPanel) return;
+
+          if (playerPanel.parentNode) {
+            playerPanel.parentNode.removeChild(playerPanel);
+          }
+
+          if (row && row.parentNode) {
+            row.parentNode.insertBefore(playerPanel, row);
+          } else if (playerHomeAnchor && playerHomeAnchor.parentNode) {
+            playerHomeAnchor.parentNode.insertBefore(playerPanel, playerHomeAnchor);
+          }
+        }
+
         function loadFile(filename, startMs = 0) {
           currentFile = filename;
           resetPlayer();
+
+          // close any open transcript panels for other files
+          document.querySelectorAll(".transcriptWrap.open").forEach(w => {
+            const row = w.closest(".result");
+            const btn = row?.querySelector(".btn-text");
+            const rowFilename = btn?.getAttribute("data-fn") || "";
+
+            if (rowFilename === filename) return;
+
+            w.classList.remove("open");
+            w.style.maxHeight = "0px";
+            w.style.opacity = "0";
+            setTimeout(() => { w.style.display = "none"; }, 180);
+
+            if (btn) btn.textContent = "Transcript";
+          });
 
           if (nowPlayingTitle) nowPlayingTitle.textContent = filename || "Player";
           if (nowPlayingMeta) nowPlayingMeta.textContent = "";
@@ -1324,7 +1381,10 @@ Major UI Systems
           </div>
           <div class="snippet" style="margin-top:6px;">${hit._formatted?.text || hit.text}</div>
         `;
-              div.onclick = () => loadFile(hit.filename, hit.start_ms);
+              div.onclick = () => {
+                placePlayerAboveRow(div);
+                loadFile(hit.filename, hit.start_ms);
+              };
             }
 
             resultsDiv.appendChild(div);
@@ -1523,9 +1583,9 @@ Major UI Systems
               if (e.target.closest("a") || e.target.closest("button") || e.target.closest("input") || e.target.closest("label")) {
                 return;
               }
+              placePlayerAboveRow(div);
               loadFile(hit.filename, 0);
             };
-
 
             resultsDiv.appendChild(div);
 
