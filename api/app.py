@@ -25,6 +25,7 @@ import re
 import time
 import shutil
 from pathlib import Path
+from datetime import datetime
 
 import subprocess
 import requests
@@ -879,6 +880,13 @@ def delete():
 def reindex():
     try:
         result = rebuild_meili_from_processed()
+
+        if result.get("ok"):
+            settings = validate_settings(_deep_merge(DEFAULT_SETTINGS, load_settings()))
+            settings.setdefault("meta", {})
+            settings["meta"]["last_reindex"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+            save_settings(settings)
+
         status = 200 if result.get("ok") else 500
         return jsonify(result), status
     except Exception as e:
@@ -918,6 +926,7 @@ def index_health():
         "warnings": {
             "files_index_mismatch": False,
         },
+        "last_reindex": "",
     }
 
     try:
@@ -928,6 +937,9 @@ def index_health():
                 for p in processed_dir.iterdir()
                 if p.is_file() and p.suffix.lower() in AUDIO_EXTS
             )
+
+        settings = validate_settings(_deep_merge(DEFAULT_SETTINGS, load_settings()))
+        summary["last_reindex"] = settings.get("meta", {}).get("last_reindex", "")
     except Exception as e:
         summary["ok"] = False
         summary["storage"]["error"] = str(e)
@@ -993,6 +1005,9 @@ DEFAULT_SETTINGS = {
     "meili": {
         "typo_tolerance": True,  # bool
         "synonyms": {},  # dict[str, list[str]]
+    },
+    "meta": {
+        "last_reindex": "",
     },
 }
 
@@ -1104,8 +1119,16 @@ def validate_settings(raw: dict) -> dict:
                 syn_out[k] = vals
     cleaned["meili"]["synonyms"] = syn_out
 
-    return cleaned
+    # meta.last_reindex: string timestamp
+    meta = raw.get("meta") or {}
+    last_reindex = meta.get("last_reindex", DEFAULT_SETTINGS["meta"]["last_reindex"])
+    if last_reindex is None:
+        last_reindex = ""
+    if not isinstance(last_reindex, str):
+        last_reindex = str(last_reindex)
+    cleaned["meta"]["last_reindex"] = last_reindex.strip()
 
+    return cleaned
 
 def save_settings(settings: dict) -> None:
     import json
