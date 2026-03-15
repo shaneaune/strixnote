@@ -784,6 +784,22 @@ Major UI Systems
             rows.push(row);
             row.className = "transcriptSeg";
             row.dataset.startSec = String(Math.floor(seg.startSec));
+
+            row.addEventListener("mouseenter", () => {
+              document.querySelectorAll(".timelineMarker.hover").forEach(m => {
+                m.classList.remove("hover");
+              });
+
+              const marker = document.querySelector(`.timelineMarker[data-start-sec="${Math.floor(seg.startSec)}"]`);
+              if (marker) marker.classList.add("hover");
+            });
+
+            row.addEventListener("mouseleave", () => {
+              document.querySelectorAll(".timelineMarker.hover").forEach(m => {
+                m.classList.remove("hover");
+              });
+            });
+
             row.style.cursor = "pointer";
 
             row.addEventListener("click", (e) => {

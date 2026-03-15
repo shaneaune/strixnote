@@ -337,6 +337,12 @@ a.btn {
   animation: timelineMarkerPulse 1.2s ease-in-out infinite;
 }
 
+.timelineMarker.hover {
+  background: var(--color-accent);
+  height: 16px;
+  top: 1px;
+}
+
 @keyframes timelineMarkerPulse {
   0% {
     background: rgba(91, 63, 214, 0.65);
