@@ -236,6 +236,14 @@ Major UI Systems
 
             <div id="settingsStatus" class="small muted"></div>
             <div id="reindexStatus" class="small muted"></div>
+            <div id="reindexProgressWrap" style="display:none; margin-top:8px; width:100%;">
+              <div class="progress">
+                <div id="reindexProgressBar" class="progress-bar progress-bar-indeterminate"></div>
+              </div>
+              <div class="small muted" style="margin-top:6px;">
+                Re-index may take some time on larger libraries.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -410,7 +418,8 @@ Major UI Systems
         const settingsStatus = document.getElementById("settingsStatus");
         const reindexBtn = document.getElementById("reindexBtn");
         const reindexStatus = document.getElementById("reindexStatus");
-
+        const reindexProgressWrap = document.getElementById("reindexProgressWrap");
+        const reindexProgressBar = document.getElementById("reindexProgressBar");
 
         async function loadIndexHealth() {
           if (!indexHealthBox) return;
@@ -1902,6 +1911,8 @@ Major UI Systems
 
             try {
               if (reindexStatus) reindexStatus.textContent = "Re-indexing...";
+              if (reindexBtn) reindexBtn.disabled = true;
+              if (reindexProgressWrap) reindexProgressWrap.style.display = "block";
 
               const r = await fetch("/api/reindex", { method: "POST" });
               const data = await r.json();
@@ -1921,6 +1932,9 @@ Major UI Systems
             } catch (e) {
               if (reindexStatus) reindexStatus.textContent = "Re-index failed.";
               alert("Re-index failed: " + (e?.message || e));
+            } finally {
+              if (reindexBtn) reindexBtn.disabled = false;
+              if (reindexProgressWrap) reindexProgressWrap.style.display = "none";
             }
           };
         }
