@@ -1240,7 +1240,7 @@ Major UI Systems
           }
         }
 
-        function loadFile(filename, startMs = 0) {
+        function loadFile(filename, startMs = 0, autoplay = true) {
           const previousFile = currentFile;
           currentFile = filename;
           resetPlayer();
@@ -1294,7 +1294,9 @@ Major UI Systems
             }
 
             player.currentTime = startMs / 1000;
-            player.play().catch(() => { });
+            if (autoplay) {
+              player.play().catch(() => { });
+            }
           }, { once: true });
 
           wireCaptions();
@@ -1896,6 +1898,13 @@ Major UI Systems
               pendingBrowseTranscriptOpen &&
               pendingBrowseTranscriptOpen.filename === hit.filename
             ) {
+              placePlayerAboveRow(div);
+              loadFile(
+                hit.filename,
+                Math.floor((pendingBrowseTranscriptOpen.startSec || 0) * 1000),
+                false
+              );
+
               if (tsToggle) tsToggle.checked = false; // default to timestamps ON
               if (textBtn) {
                 textBtn.click();
