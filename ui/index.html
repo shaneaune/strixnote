@@ -123,6 +123,7 @@ Major UI Systems
           <select id="searchMode" style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
             <option value="segments">Segments</option>
             <option value="files">Files</option>
+            <option value="filename">File name</option>
           </select>
 
           <select id="dateField" style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
@@ -553,13 +554,14 @@ Major UI Systems
 
         try {
           const saved = localStorage.getItem(SEARCH_MODE_KEY);
-          if (saved === "segments" || saved === "files") searchModeValue = saved;
+          if (saved === "segments" || saved === "files" || saved === "filename") searchModeValue = saved;
         } catch (e) { }
 
         if (searchMode) {
           searchMode.value = searchModeValue;
           searchMode.addEventListener("change", async () => {
-            searchModeValue = searchMode.value === "files" ? "files" : "segments";
+            const next = searchMode.value;
+            searchModeValue = (next === "files" || next === "filename") ? next : "segments";
             try { localStorage.setItem(SEARCH_MODE_KEY, searchModeValue); } catch (e) { }
             searchOffset = 0;
             if (searchQuery) await performSearch();
@@ -1416,19 +1418,28 @@ Major UI Systems
 
           if (!searchQuery && !filter) return;
 
+          const isFilename = (searchModeValue === "filename");
           const isFiles = (searchModeValue === "files") || (!searchQuery && !!filter);
-          const index = isFiles ? INDEX_FILES : INDEX_SEG;
+          const index = (isFiles || isFilename) ? INDEX_FILES : INDEX_SEG;
 
           const req = {
             q: searchQuery,
             limit: browseLimit,
             offset: searchOffset,
             filter: filter || undefined,
-            sort: [isFiles ? `created_at:${searchSortOrder?.value || "desc"}` : "created_at:desc"],
-            attributesToHighlight: ["text"],
-            attributesToCrop: ["text"],
+            sort: [(isFiles || isFilename) ? `created_at:${searchSortOrder?.value || "desc"}` : "created_at:desc"],
+            attributesToHighlight: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
+            attributesToCrop: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             cropLength: 60
           };
+
+          if (isFiles) {
+            req.attributesToSearchOn = ["text"];
+          } else if (isFilename) {
+            req.attributesToSearchOn = ["filename"];
+          } else {
+            req.attributesToSearchOn = ["text"];
+          }
 
           let data;
           try {
@@ -1450,20 +1461,22 @@ Major UI Systems
             pagerInfo.textContent = "";
             if (searchSortBar) searchSortBar.style.display = "none";
             if (searchStatus) searchStatus.textContent = "";
-            if (searchStatus) searchStatus.textContent = isFiles ? "Files results: 0" : "Segment results: 0";
+            if (searchStatus) searchStatus.textContent = isFilename ? "File name results: 0" : (isFiles ? "Files results: 0" : "Segment results: 0");
             return;
           }
 
-          if (searchSortBar) searchSortBar.style.display = isFiles ? "flex" : "none";
+          if (searchSortBar) searchSortBar.style.display = (isFiles || isFilename) ? "flex" : "none";
 
           if (searchStatus) {
             const total = data.estimatedTotalHits ?? data.hits.length ?? 0;
             const start = total === 0 ? 0 : searchOffset + 1;
             const end = Math.min(searchOffset + (data.hits?.length || 0), total);
 
-            if (isFiles) {
+            if (isFiles || isFilename) {
               const sortLabel = (searchSortOrder?.value || "desc") === "asc" ? "oldest first" : "newest first";
-              searchStatus.textContent = `Files results: ${total} • Showing ${start}-${end} • Sorted: ${sortLabel}`;
+              searchStatus.textContent = isFilename
+                ? `File name results: ${total} • Showing ${start}-${end} • Sorted: ${sortLabel}`
+                : `Files results: ${total} • Showing ${start}-${end} • Sorted: ${sortLabel}`;
             } else {
               searchStatus.textContent = `Segment results: ${total} • Showing ${start}-${end}`;
             }
@@ -1473,7 +1486,7 @@ Major UI Systems
             const div = document.createElement("div");
             div.className = "result";
 
-            if (isFiles) {
+            if (isFiles || isFilename) {
               div.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <div>
