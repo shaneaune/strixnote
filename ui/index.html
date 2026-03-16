@@ -1088,6 +1088,47 @@ Major UI Systems
             clearTimeout(t);
           }
         }
+
+        async function findBrowseOffsetForFilename(filename) {
+          if (!filename) return 0;
+
+          if (isPinnedFile(filename)) {
+            return 0;
+          }
+
+          const sortDir = browseSortOrder?.value || "desc";
+          const batchSize = 200;
+          let offset = 0;
+
+          while (true) {
+            const data = await meili(INDEX_FILES, {
+              q: "",
+              limit: batchSize,
+              offset,
+              sort: [`created_at:${sortDir}`]
+            });
+
+            const hits = data.hits || [];
+            if (!hits.length) {
+              return 0;
+            }
+
+            const filteredHits = hits.filter(d => !isPinnedFile(d.filename));
+            const idx = filteredHits.findIndex(d => d.filename === filename);
+
+            if (idx !== -1) {
+              const absoluteIndex = offset + idx;
+              return Math.floor(absoluteIndex / browseLimit) * browseLimit;
+            }
+
+            if (hits.length < batchSize) {
+              return 0;
+            }
+
+            offset += batchSize;
+          }
+        }
+
         function formatBytes(bytes) {
           if (bytes == null || isNaN(bytes)) return "";
           const units = ["B", "KB", "MB", "GB"];
@@ -1564,6 +1605,8 @@ Major UI Systems
                   filename: hit.filename,
                   startSec: Math.floor((hit.start_ms || 0) / 1000),
                 };
+
+                browseOffset = await findBrowseOffsetForFilename(hit.filename);
 
                 await tabBrowse.onclick();
               };
