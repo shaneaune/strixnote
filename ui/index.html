@@ -548,6 +548,7 @@ Major UI Systems
         let currentFile = null;
         let currentTimelineSegments = [];
         let currentTimelineFilename = "";
+        let pendingBrowseTranscriptOpen = null;
         const browseLimit = 20;
 
         try {
@@ -1532,20 +1533,44 @@ Major UI Systems
             } else {
 
               div.innerHTML = `
-          <div class="file" title="${hit.filename}">${hit.filename}</div>
-          <div style="display:flex; gap:12px; align-items:center; margin-top:4px;">
-            <div class="time" style="font-weight:600; min-width:120px;">Time: ${msToHMS(hit.start_ms)}</div>
-            <div class="dt">${epochToLocal(hit.created_at)}</div>
-          </div>
-          <div class="snippet" style="margin-top:6px;">${hit._formatted?.text || hit.text}</div>
-        `;
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+              <div style="min-width:0; flex:1;">
+                <div class="file" title="${hit.filename}">${hit.filename}</div>
+                <div style="display:flex; gap:12px; align-items:center; margin-top:4px;">
+                  <div class="time" style="font-weight:600; min-width:120px;">Time: ${msToHMS(hit.start_ms)}</div>
+                  <div class="dt">${epochToLocal(hit.created_at)}</div>
+                </div>
+                <div class="snippet" style="margin-top:6px;">${hit._formatted?.text || hit.text}</div>
+              </div>
+              <button class="btn btn-secondary btn-open-transcript"
+                type="button"
+                style="height:38px; display:inline-flex; align-items:center; white-space:nowrap;">
+                Open transcript
+              </button>
+            </div>
+          `;
               div.onclick = () => {
                 placePlayerAboveRow(div);
                 loadFile(hit.filename, hit.start_ms);
               };
             }
 
+            const openTranscriptBtn = div.querySelector(".btn-open-transcript");
+            if (openTranscriptBtn) {
+              openTranscriptBtn.onclick = async (e) => {
+                e.stopPropagation();
+
+                pendingBrowseTranscriptOpen = {
+                  filename: hit.filename,
+                  startSec: Math.floor((hit.start_ms || 0) / 1000),
+                };
+
+                await tabBrowse.onclick();
+              };
+            }
+
             resultsDiv.appendChild(div);
+
           });
 
           browsePager.style.display = "flex";
@@ -1823,6 +1848,39 @@ Major UI Systems
               tsToggle,
               dlBtn,
             });
+
+            if (
+              pendingBrowseTranscriptOpen &&
+              pendingBrowseTranscriptOpen.filename === hit.filename
+            ) {
+              if (tsToggle) tsToggle.checked = false; // default to timestamps ON
+              if (textBtn) {
+                textBtn.click();
+              }
+
+              const targetSec = pendingBrowseTranscriptOpen.startSec;
+              if (typeof targetSec === "number") {
+                setTimeout(() => {
+                  const targetRow = transcriptBox?.querySelector(
+                    `.transcriptSeg[data-start-sec="${targetSec}"]`
+                  );
+
+                  if (targetRow && transcriptBox) {
+                    targetRow.classList.add("selected");
+
+                    const boxRect = transcriptBox.getBoundingClientRect();
+                    const rowRect = targetRow.getBoundingClientRect();
+                    const rowTopInBox = rowRect.top - boxRect.top + transcriptBox.scrollTop;
+                    const targetTop = rowTopInBox - (transcriptBox.clientHeight / 2) + (rowRect.height / 2);
+
+                    transcriptBox.scrollTop = Math.max(0, targetTop);
+                  }
+                }, 50);
+              }
+
+              pendingBrowseTranscriptOpen = null;
+            }
+
           });
           prevPage.disabled = (browseOffset === 0);
           nextPage.disabled = !data.hits || data.hits.length < browseLimit;
