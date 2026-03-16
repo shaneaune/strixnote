@@ -113,7 +113,7 @@ Major UI Systems
       <div class="tabs">
         <div class="tab active" id="tabBrowse">Browse</div>
         <div class="tab" id="tabSearch">Search</div>
-        <div class="tab" id="tabSearch">Search</div>
+        <div class="tab" id="tabSettings">Settings</div>
       </div>
 
       <div id="searchWrap" style="display:flex; flex-direction:column; gap:10px;">
@@ -1916,6 +1916,14 @@ Major UI Systems
 
               const r = await fetch("/api/reindex", { method: "POST" });
               const data = await r.json();
+
+              if (!r.ok) {
+                if (r.status === 409) {
+                  if (reindexStatus) reindexStatus.textContent = "Re-index already in progress.";
+                  return;
+                }
+                throw new Error(data.error || "Re-index failed");
+              }
 
               if (!data.ok) {
                 throw new Error(data.error || "Re-index failed");

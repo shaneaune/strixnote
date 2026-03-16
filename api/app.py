@@ -45,6 +45,8 @@ INDEX_SEGMENTS = os.environ.get("INDEX_SEGMENTS", "segments")
 
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".webm"}
 
+REINDEX_RUNNING = False
+
 MAX_UPLOAD_BYTES = (
     int(os.environ.get("MAX_UPLOAD_GB", "2")) * 1024 * 1024 * 1024
 )  # default 2 GiB
@@ -472,7 +474,7 @@ def ensure_meili_schema():
 # Run Meili schema verification once per container start (avoid running in every gunicorn worker)
 # Uses a simple file lock in /tmp shared by all workers in the container.
 _LOCK_PATH = "/tmp/strixnote_meili_schema.lock"
-
+_REINDEX_LOCK_PATH = "/tmp/strixnote_reindex.lock"
 
 def _try_acquire_lock(path: str) -> bool:
     try:
@@ -878,6 +880,17 @@ def delete():
 
 @app.post("/reindex")
 def reindex():
+    if not _try_acquire_lock(_REINDEX_LOCK_PATH):
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Re-index already in progress.",
+                }
+            ),
+            409,
+        )
+
     try:
         result = rebuild_meili_from_processed()
 
@@ -899,7 +912,12 @@ def reindex():
             ),
             500,
         )
-
+    finally:
+        try:
+            if os.path.exists(_REINDEX_LOCK_PATH):
+                os.unlink(_REINDEX_LOCK_PATH)
+        except Exception:
+            pass
 
 @app.get("/index-health")
 def index_health():
