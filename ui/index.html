@@ -1903,7 +1903,8 @@ Major UI Systems
 
               const targetSec = pendingBrowseTranscriptOpen.startSec;
               if (typeof targetSec === "number") {
-                setTimeout(() => {
+                let tries = 0;
+                const trySelectTargetRow = () => {
                   const targetRow = transcriptBox?.querySelector(
                     `.transcriptSeg[data-start-sec="${targetSec}"]`
                   );
@@ -1911,19 +1912,33 @@ Major UI Systems
                   if (targetRow && transcriptBox) {
                     targetRow.classList.add("selected");
 
+                    setTimeout(() => {
+                      targetRow.classList.remove("selected");
+                    }, 4000);
+
                     const boxRect = transcriptBox.getBoundingClientRect();
                     const rowRect = targetRow.getBoundingClientRect();
                     const rowTopInBox = rowRect.top - boxRect.top + transcriptBox.scrollTop;
                     const targetTop = rowTopInBox - (transcriptBox.clientHeight / 2) + (rowRect.height / 2);
 
                     transcriptBox.scrollTop = Math.max(0, targetTop);
+                    pendingBrowseTranscriptOpen = null;
+                    return;
                   }
-                }, 50);
+
+                  tries += 1;
+                  if (tries < 20) {
+                    setTimeout(trySelectTargetRow, 100);
+                  } else {
+                    pendingBrowseTranscriptOpen = null;
+                  }
+                };
+
+                setTimeout(trySelectTargetRow, 100);
+              } else {
+                pendingBrowseTranscriptOpen = null;
               }
-
-              pendingBrowseTranscriptOpen = null;
             }
-
           });
           prevPage.disabled = (browseOffset === 0);
           nextPage.disabled = !data.hits || data.hits.length < browseLimit;
