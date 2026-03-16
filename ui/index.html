@@ -557,16 +557,27 @@ Major UI Systems
           if (saved === "segments" || saved === "files" || saved === "filename") searchModeValue = saved;
         } catch (e) { }
 
-        if (searchMode) {
-          searchMode.value = searchModeValue;
-          searchMode.addEventListener("change", async () => {
-            const next = searchMode.value;
-            searchModeValue = (next === "files" || next === "filename") ? next : "segments";
-            try { localStorage.setItem(SEARCH_MODE_KEY, searchModeValue); } catch (e) { }
-            searchOffset = 0;
-            if (searchQuery) await performSearch();
-          });
-        }
+        searchMode.addEventListener("change", async () => {
+          const v = searchMode.value;
+          if (v === "files" || v === "segments" || v === "filename") {
+            searchModeValue = v;
+          } else {
+            searchModeValue = "segments";
+          }
+
+          try { localStorage.setItem(SEARCH_MODE_KEY, searchModeValue); } catch (e) { }
+
+          searchOffset = 0;
+
+          // focus search box when mode changes
+          const q = document.getElementById("searchBox");
+          if (q) {
+            q.focus();
+            q.select();
+          }
+
+          if (searchQuery) await performSearch();
+        });
 
         // ============================================================================
         // Utility Functions
