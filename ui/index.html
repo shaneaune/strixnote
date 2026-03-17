@@ -366,6 +366,7 @@ Major UI Systems
           if (nextMode === "settings") {
             searchWrap.style.display = "none";
             settingsWrap.style.display = "block";
+            if (bookmarksWrap) bookmarksWrap.style.display = "none";
             playerPanel.style.display = "none";
             browsePager.style.display = "none";
             if (browseSortBar) browseSortBar.style.display = "none";
@@ -377,6 +378,7 @@ Major UI Systems
           if (nextMode === "browse") {
             searchWrap.style.display = "none";
             settingsWrap.style.display = "none";
+            if (bookmarksWrap) bookmarksWrap.style.display = "none";
             playerPanel.style.display = "block";
             placePlayerAboveRow(null);
             browsePager.style.display = "flex";
@@ -403,6 +405,7 @@ Major UI Systems
 
           // "search"
           searchWrap.style.display = "block";
+          if (bookmarksWrap) bookmarksWrap.style.display = "none";
           settingsWrap.style.display = "none";
           playerPanel.style.display = "block";
           placePlayerAboveRow(null);
@@ -653,12 +656,16 @@ Major UI Systems
                     <div class="file">${b.filename}</div>
                     <div class="small muted">Bookmarked file</div>
                   </div>
-                  <div>
-                    <button class="btn btn-secondary btn-open-file"
-                      data-fn="${b.filename}">
-                      Open
-                    </button>
-                  </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <button class="btn btn-secondary btn-open-file"
+                        data-fn="${b.filename}">
+                        Open
+                      </button>
+                      <button class="btn btn-secondary btn-unbookmark-file"
+                        data-fn="${b.filename}">
+                        Unbookmark
+                      </button>
+                    </div>
                 </div>
               `;
 
@@ -675,6 +682,14 @@ Major UI Systems
                 };
               }
 
+              const unbookmarkFileBtn = div.querySelector(".btn-unbookmark-file");
+              if (unbookmarkFileBtn) {
+                unbookmarkFileBtn.onclick = () => {
+                  removeBookmark({ type: "file", filename: b.filename });
+                  renderBookmarks();
+                };
+              }
+
             } else if (b.type === "segment") {
               div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -683,12 +698,16 @@ Major UI Systems
                     <div class="small muted">Time: ${formatDuration(b.startSec || 0)}</div>
                     <div class="snippet">${escapeHtml(b.text || "")}</div>
                   </div>
-                  <div>
-                    <button class="btn btn-secondary btn-open-seg"
-                      data-fn="${b.filename}">
-                      Open
-                    </button>
-                  </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <button class="btn btn-secondary btn-open-seg"
+                        data-fn="${b.filename}">
+                        Open
+                      </button>
+                      <button class="btn btn-secondary btn-unbookmark-seg"
+                        data-fn="${b.filename}">
+                        Unbookmark
+                      </button>
+                    </div>
                 </div>
               `;
 
@@ -703,6 +722,17 @@ Major UI Systems
                   const offset = await findBrowseOffsetForFilename(b.filename);
                   browseOffset = offset || 0;
                   await tabBrowse.onclick();
+                };
+              }
+              const unbookmarkSegBtn = div.querySelector(".btn-unbookmark-seg");
+              if (unbookmarkSegBtn) {
+                unbookmarkSegBtn.onclick = () => {
+                  removeBookmark({
+                    type: "segment",
+                    filename: b.filename,
+                    startSec: b.startSec
+                  });
+                  renderBookmarks();
                 };
               }
             }
@@ -1792,17 +1822,53 @@ Major UI Systems
                 </div>
                 <div class="snippet" style="margin-top:6px;">${hit._formatted?.text || hit.text}</div>
               </div>
-              <button class="btn btn-secondary btn-open-transcript"
-                type="button"
-                style="height:38px; display:inline-flex; align-items:center; white-space:nowrap;">
-                Open transcript
-              </button>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <button class="btn btn-secondary btn-open-transcript"
+                    type="button"
+                    style="height:38px; display:inline-flex; align-items:center; white-space:nowrap;">
+                    Open transcript
+                  </button>
+                  <button class="btn btn-secondary btn-bookmark-seg"
+                    type="button"
+                    style="height:38px; display:inline-flex; align-items:center; white-space:nowrap;">
+                    ${isBookmarkedSegment(hit.filename, Math.floor((hit.start_ms || 0) / 1000)) ? "Unbookmark" : "Bookmark"}
+                  </button>
+                </div>            
             </div>
           `;
               div.onclick = () => {
                 placePlayerAboveRow(div);
                 loadFile(hit.filename, hit.start_ms);
               };
+
+              const bookmarkSegBtn = div.querySelector(".btn-bookmark-seg");
+              if (bookmarkSegBtn) {
+                bookmarkSegBtn.onclick = (e) => {
+                  e.stopPropagation();
+
+                  const startSec = Math.floor((hit.start_ms || 0) / 1000);
+
+                  if (isBookmarkedSegment(hit.filename, startSec)) {
+                    removeBookmark({
+                      type: "segment",
+                      filename: hit.filename,
+                      startSec
+                    });
+                  } else {
+                    addBookmark({
+                      type: "segment",
+                      filename: hit.filename,
+                      startSec,
+                      text: hit.text || ""
+                    });
+                  }
+
+                  bookmarkSegBtn.textContent = isBookmarkedSegment(hit.filename, startSec)
+                    ? "Unbookmark"
+                    : "Bookmark";
+                };
+              }
+
             }
 
             const openTranscriptBtn = div.querySelector(".btn-open-transcript");
