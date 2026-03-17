@@ -362,6 +362,7 @@ Major UI Systems
 
         function setMode(nextMode) {
           mode = nextMode;
+          try { player.pause(); } catch (e) { }
 
           if (nextMode === "settings") {
             searchWrap.style.display = "none";
@@ -380,7 +381,7 @@ Major UI Systems
             settingsWrap.style.display = "none";
             if (bookmarksWrap) bookmarksWrap.style.display = "none";
             playerPanel.style.display = "block";
-            placePlayerAboveRow(null);
+            // keep player where it is when returning to Browse
             browsePager.style.display = "flex";
             if (browseSortBar) browseSortBar.style.display = "flex";
             if (searchSortBar) searchSortBar.style.display = "none";
@@ -408,7 +409,7 @@ Major UI Systems
           if (bookmarksWrap) bookmarksWrap.style.display = "none";
           settingsWrap.style.display = "none";
           playerPanel.style.display = "block";
-          placePlayerAboveRow(null);
+          // keep player where it is when switching to Search
           if (browseSortBar) browseSortBar.style.display = "none";
           if (searchSortBar) searchSortBar.style.display = "none";
           if (searchStatus) searchStatus.textContent = "";
