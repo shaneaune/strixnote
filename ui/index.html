@@ -662,7 +662,7 @@ Major UI Systems
                         data-fn="${b.filename}">
                         Open
                       </button>
-                      <button class="btn btn-secondary btn-unbookmark-file"
+                        <button class="btn btn-secondary btn-unbookmark-file btn-bookmarked"
                         data-fn="${b.filename}">
                         Unbookmark
                       </button>
@@ -704,7 +704,7 @@ Major UI Systems
                         data-fn="${b.filename}">
                         Open
                       </button>
-                      <button class="btn btn-secondary btn-unbookmark-seg"
+                        <button class="btn btn-secondary btn-unbookmark-seg btn-bookmarked"
                         data-fn="${b.filename}">
                         Unbookmark
                       </button>
@@ -1741,7 +1741,7 @@ Major UI Systems
           Transcript
         </button>
 
-          <button class="btn btn-secondary btn-bookmark"
+            <button class="btn btn-secondary btn-bookmark ${isBookmarkedFile(hit.filename) ? "btn-bookmarked" : ""}"
                   type="button"
                   data-fn="${hit.filename}"
                   style="height:38px; display:inline-flex; align-items:center;">
@@ -1828,9 +1828,9 @@ Major UI Systems
                     addBookmark({ type: "file", filename: hit.filename });
                   }
 
-                  bookmarkBtn.textContent = isBookmarkedFile(hit.filename)
-                    ? "Unbookmark"
-                    : "Bookmark";
+                  const active = isBookmarkedFile(hit.filename);
+                  bookmarkBtn.textContent = active ? "Unbookmark" : "Bookmark";
+                  bookmarkBtn.classList.toggle("btn-bookmarked", active);
                 };
               }
 
@@ -1868,7 +1868,7 @@ Major UI Systems
                     style="height:38px; display:inline-flex; align-items:center; white-space:nowrap;">
                     Open transcript
                   </button>
-                  <button class="btn btn-secondary btn-bookmark-seg"
+                    <button class="btn btn-secondary btn-bookmark-seg ${isBookmarkedSegment(hit.filename, Math.floor((hit.start_ms || 0) / 1000)) ? "btn-bookmarked" : ""}"
                     type="button"
                     style="height:38px; display:inline-flex; align-items:center; white-space:nowrap;">
                     ${isBookmarkedSegment(hit.filename, Math.floor((hit.start_ms || 0) / 1000)) ? "Unbookmark" : "Bookmark"}
@@ -1903,9 +1903,9 @@ Major UI Systems
                     });
                   }
 
-                  bookmarkSegBtn.textContent = isBookmarkedSegment(hit.filename, startSec)
-                    ? "Unbookmark"
-                    : "Bookmark";
+                  const active = isBookmarkedSegment(hit.filename, startSec);
+                  bookmarkSegBtn.textContent = active ? "Unbookmark" : "Bookmark";
+                  bookmarkSegBtn.classList.toggle("btn-bookmarked", active);
                 };
               }
 
@@ -2079,7 +2079,7 @@ Major UI Systems
               Transcript
             </button>
 
-              <button class="btn btn-secondary btn-bookmark"
+              <button class="btn btn-secondary btn-bookmark ${isBookmarkedFile(hit.filename) ? "btn-bookmarked" : ""}"
                 type="button"
                 data-fn="${hit.filename}"
                 style="height:38px; display:inline-flex; align-items:center;">
@@ -2194,9 +2194,9 @@ Major UI Systems
                   addBookmark({ type: "file", filename: hit.filename });
                 }
 
-                bookmarkBtn.textContent = isBookmarkedFile(hit.filename)
-                  ? "Unbookmark"
-                  : "Bookmark";
+                const active = isBookmarkedFile(hit.filename);
+                bookmarkBtn.textContent = active ? "Unbookmark" : "Bookmark";
+                bookmarkBtn.classList.toggle("btn-bookmarked", active);
               };
             }
 
