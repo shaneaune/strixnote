@@ -113,6 +113,7 @@ Major UI Systems
       <div class="tabs">
         <div class="tab active" id="tabBrowse">Browse</div>
         <div class="tab" id="tabSearch">Search</div>
+        <div class="tab" id="tabBookmarks">Bookmarks</div>
         <div class="tab" id="tabSettings">Settings</div>
       </div>
 
@@ -155,6 +156,13 @@ Major UI Systems
           </button>
 
         </div>
+      </div>
+      <div id="bookmarksWrap" class="panel" style="display:none; margin-top:10px;">
+        <div style="font-weight:600; margin-bottom:10px;">Bookmarks</div>
+        <div id="bookmarksEmpty" class="small muted" style="padding:12px 2px;">
+          No bookmarks yet.
+        </div>
+        <div id="bookmarksList"></div>
       </div>
       <div id="settingsWrap" class="panel" style="display:none; margin-top:10px;">
         <div style="font-weight:600; margin-bottom:10px;">Settings</div>
@@ -329,8 +337,12 @@ Major UI Systems
         const nowPlayingTitle = document.getElementById("nowPlayingTitle");
         const nowPlayingMeta = document.getElementById("nowPlayingMeta");
         const tabSearch = document.getElementById("tabSearch");
+        const tabBookmarks = document.getElementById("tabBookmarks");
         const tabBrowse = document.getElementById("tabBrowse");
         const searchWrap = document.getElementById("searchWrap");
+        const bookmarksWrap = document.getElementById("bookmarksWrap");
+        const bookmarksEmpty = document.getElementById("bookmarksEmpty");
+        const bookmarksList = document.getElementById("bookmarksList");
         const browsePager = document.getElementById("browsePager");
         const searchSortBar = document.getElementById("searchSortBar");
         const searchSortOrder = document.getElementById("searchSortOrder");
@@ -344,6 +356,7 @@ Major UI Systems
         function setActiveTab(tabName) {
           tabSearch?.classList.toggle("active", tabName === "search");
           tabBrowse?.classList.toggle("active", tabName === "browse");
+          tabBookmarks?.classList.toggle("active", tabName === "bookmarks");
           tabSettings?.classList.toggle("active", tabName === "settings");
         }
 
@@ -550,7 +563,153 @@ Major UI Systems
         let currentTimelineSegments = [];
         let currentTimelineFilename = "";
         let pendingBrowseTranscriptOpen = null;
+        let pendingBrowseFileOpen = null;
         const browseLimit = 20;
+
+        const BOOKMARKS_KEY = "strixnote_bookmarks";
+
+        function getBookmarks() {
+          try {
+            const raw = localStorage.getItem(BOOKMARKS_KEY);
+            return raw ? JSON.parse(raw) : [];
+          } catch (e) {
+            return [];
+          }
+        }
+
+        function saveBookmarks(list) {
+          try {
+            localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(list || []));
+          } catch (e) { }
+        }
+
+        function addBookmark(item) {
+          const list = getBookmarks();
+
+          const exists = list.some(b =>
+            b.type === item.type &&
+            b.filename === item.filename &&
+            (b.type === "file" || b.startSec === item.startSec)
+          );
+
+          if (exists) return;
+
+          list.unshift({
+            ...item,
+            created_at: Date.now()
+          });
+
+          saveBookmarks(list);
+        }
+
+        function removeBookmark(item) {
+          let list = getBookmarks();
+
+          list = list.filter(b =>
+            !(
+              b.type === item.type &&
+              b.filename === item.filename &&
+              (b.type === "file" || b.startSec === item.startSec)
+            )
+          );
+
+          saveBookmarks(list);
+        }
+
+        function isBookmarkedFile(filename) {
+          return getBookmarks().some(b => b.type === "file" && b.filename === filename);
+        }
+
+        function isBookmarkedSegment(filename, startSec) {
+          return getBookmarks().some(b =>
+            b.type === "segment" &&
+            b.filename === filename &&
+            b.startSec === startSec
+          );
+        }
+
+        function renderBookmarks() {
+          const list = getBookmarks();
+
+          if (!bookmarksList || !bookmarksEmpty) return;
+
+          bookmarksList.innerHTML = "";
+
+          if (!list.length) {
+            bookmarksEmpty.style.display = "block";
+            return;
+          }
+
+          bookmarksEmpty.style.display = "none";
+
+          list.forEach(b => {
+            const div = document.createElement("div");
+            div.className = "result";
+
+            if (b.type === "file") {
+              div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div class="file">${b.filename}</div>
+                    <div class="small muted">Bookmarked file</div>
+                  </div>
+                  <div>
+                    <button class="btn btn-secondary btn-open-file"
+                      data-fn="${b.filename}">
+                      Open
+                    </button>
+                  </div>
+                </div>
+              `;
+
+              const btn = div.querySelector(".btn-open-file");
+              if (btn) {
+                btn.onclick = async () => {
+                  pendingBrowseFileOpen = {
+                    filename: b.filename
+                  };
+
+                  const offset = await findBrowseOffsetForFilename(b.filename);
+                  browseOffset = offset || 0;
+                  await tabBrowse.onclick();
+                };
+              }
+
+            } else if (b.type === "segment") {
+              div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div class="file">${b.filename}</div>
+                    <div class="small muted">Time: ${formatDuration(b.startSec || 0)}</div>
+                    <div class="snippet">${escapeHtml(b.text || "")}</div>
+                  </div>
+                  <div>
+                    <button class="btn btn-secondary btn-open-seg"
+                      data-fn="${b.filename}">
+                      Open
+                    </button>
+                  </div>
+                </div>
+              `;
+
+              const btn = div.querySelector(".btn-open-seg");
+              if (btn) {
+                btn.onclick = async () => {
+                  pendingBrowseTranscriptOpen = {
+                    filename: b.filename,
+                    startSec: b.startSec
+                  };
+
+                  const offset = await findBrowseOffsetForFilename(b.filename);
+                  browseOffset = offset || 0;
+                  await tabBrowse.onclick();
+                };
+              }
+            }
+
+            bookmarksList.appendChild(div);
+          });
+        }
 
         try {
           const saved = localStorage.getItem(SEARCH_MODE_KEY);
@@ -1512,6 +1671,13 @@ Major UI Systems
           Transcript
         </button>
 
+          <button class="btn btn-secondary btn-bookmark"
+                  type="button"
+                  data-fn="${hit.filename}"
+                  style="height:38px; display:inline-flex; align-items:center;">
+            ${isBookmarkedFile(hit.filename) ? "Unbookmark" : "Bookmark"}
+          </button>        
+
         <a class="btn btn-secondary"
            href="/audio/${hit.filename}"
            download
@@ -1578,6 +1744,23 @@ Major UI Systems
 
                   div.remove();
                   refreshBrowseIfVisible();
+                };
+              }
+
+              const bookmarkBtn = div.querySelector(".btn-bookmark");
+              if (bookmarkBtn) {
+                bookmarkBtn.onclick = (e) => {
+                  e.stopPropagation();
+
+                  if (isBookmarkedFile(hit.filename)) {
+                    removeBookmark({ type: "file", filename: hit.filename });
+                  } else {
+                    addBookmark({ type: "file", filename: hit.filename });
+                  }
+
+                  bookmarkBtn.textContent = isBookmarkedFile(hit.filename)
+                    ? "Unbookmark"
+                    : "Bookmark";
                 };
               }
 
@@ -1790,6 +1973,13 @@ Major UI Systems
               Transcript
             </button>
 
+              <button class="btn btn-secondary btn-bookmark"
+                type="button"
+                data-fn="${hit.filename}"
+                style="height:38px; display:inline-flex; align-items:center;">
+                ${isBookmarkedFile(hit.filename) ? "Unbookmark" : "Bookmark"}
+              </button>            
+
             <a class="btn btn-secondary"
               href="/audio/${hit.filename}"
               download
@@ -1886,6 +2076,24 @@ Major UI Systems
 
               div.remove();
             };
+
+            const bookmarkBtn = div.querySelector(".btn-bookmark");
+            if (bookmarkBtn) {
+              bookmarkBtn.onclick = (e) => {
+                e.stopPropagation();
+
+                if (isBookmarkedFile(hit.filename)) {
+                  removeBookmark({ type: "file", filename: hit.filename });
+                } else {
+                  addBookmark({ type: "file", filename: hit.filename });
+                }
+
+                bookmarkBtn.textContent = isBookmarkedFile(hit.filename)
+                  ? "Unbookmark"
+                  : "Bookmark";
+              };
+            }
+
             const textBtn = div.querySelector(".btn-text");
             const transcriptWrap = div.querySelector(".transcriptWrap");
             const transcriptBox = div.querySelector(".transcriptBox");
@@ -1917,6 +2125,16 @@ Major UI Systems
               tsToggle,
               dlBtn,
             });
+
+            if (
+              pendingBrowseFileOpen &&
+              pendingBrowseFileOpen.filename === hit.filename
+            ) {
+              placePlayerAboveRow(div);
+              loadFile(hit.filename, 0);
+              div.scrollIntoView({ block: "center", behavior: "smooth" });
+              pendingBrowseFileOpen = null;
+            }
 
             if (
               pendingBrowseTranscriptOpen &&
@@ -2019,6 +2237,28 @@ Major UI Systems
             nextPage.disabled = true;
           }
         };
+        if (tabBookmarks) {
+          tabBookmarks.onclick = async () => {
+            mode = "bookmarks";
+            setActiveTab("bookmarks");
+
+            if (searchWrap) searchWrap.style.display = "none";
+            if (settingsWrap) settingsWrap.style.display = "none";
+            if (bookmarksWrap) bookmarksWrap.style.display = "block";
+            renderBookmarks();
+
+            if (playerPanel) playerPanel.style.display = "none";
+            if (browsePager) browsePager.style.display = "none";
+            if (searchSortBar) searchSortBar.style.display = "none";
+            if (browseSortBar) browseSortBar.style.display = "none";
+
+            if (resultsDiv) resultsDiv.innerHTML = "";
+            if (searchStatus) searchStatus.textContent = "";
+            if (pagerInfo) pagerInfo.textContent = "";
+            if (prevPage) prevPage.disabled = true;
+            if (nextPage) nextPage.disabled = true;
+          };
+        }
         if (tabSettings) {
           tabSettings.onclick = async () => {
             setMode("settings");
