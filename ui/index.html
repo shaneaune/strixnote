@@ -1007,6 +1007,8 @@ Major UI Systems
             const row = document.createElement("div");
             rows.push(row);
             row.className = "transcriptSeg";
+            row.style.display = "flex";
+            row.style.alignItems = "center";
             row.dataset.startSec = String(Math.floor(seg.startSec));
 
             row.addEventListener("mouseenter", () => {
@@ -1049,11 +1051,15 @@ Major UI Systems
             const text = document.createElement("span");
             text.className = "transcriptText";
             text.textContent = "  " + seg.text;
+            text.style.flex = "1";
+            text.style.minWidth = "0";
 
             const copy = document.createElement("span");
             copy.className = "transcriptCopy";
             copy.title = "Copy segment";
             copy.textContent = "📋";
+            copy.style.marginLeft = "auto";
+            copy.style.marginRight = "8px";
 
             copy.addEventListener("click", async (e) => {
               e.stopPropagation();
@@ -1082,6 +1088,39 @@ Major UI Systems
             row.appendChild(ts);
             row.appendChild(text);
             row.appendChild(copy);
+
+            const bookmark = document.createElement("span");
+            bookmark.className = "transcriptBookmark";
+            bookmark.title = "Bookmark segment";
+
+            const startSec = Math.floor(seg.startSec || 0);
+            bookmark.textContent = isBookmarkedSegment(filename, startSec) ? "★" : "☆";
+            bookmark.style.marginLeft = "0";
+
+            bookmark.addEventListener("click", (e) => {
+              e.stopPropagation();
+
+              const startSec = Math.floor(seg.startSec || 0);
+
+              if (isBookmarkedSegment(filename, startSec)) {
+                removeBookmark({
+                  type: "segment",
+                  filename,
+                  startSec
+                });
+              } else {
+                addBookmark({
+                  type: "segment",
+                  filename,
+                  startSec,
+                  text: seg.text || ""
+                });
+              }
+
+              bookmark.textContent = isBookmarkedSegment(filename, startSec) ? "★" : "☆";
+            });
+
+            row.appendChild(bookmark);
 
             transcriptBox.appendChild(row);
           });
