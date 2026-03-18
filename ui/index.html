@@ -196,6 +196,12 @@ Major UI Systems
                 </div>
               </div>
             </label>
+            <div class="small muted" style="margin:14px 0 6px;">Browse limit (5–100)</div>
+            <input id="setBrowseLimit" type="number" min="5" max="100"
+              style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+            <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
+              Controls how many results are shown per page in Browse and Search.
+            </div>
           </div>
 
           <div style="min-width:360px; flex:1; margin-top:24px;">
@@ -428,6 +434,7 @@ Major UI Systems
         const setWhisperLanguage = document.getElementById("setWhisperLanguage");
         const setWhisperBeam = document.getElementById("setWhisperBeam");
         const setWhisperVad = document.getElementById("setWhisperVad");
+        const setBrowseLimit = document.getElementById("setBrowseLimit");
 
         const setMeiliTypo = document.getElementById("setMeiliTypo");
         const setMeiliSynonyms = document.getElementById("setMeiliSynonyms");
@@ -505,10 +512,9 @@ Major UI Systems
           if (setWhisperLanguage) setWhisperLanguage.value = (w.language || "");
           if (setWhisperBeam) setWhisperBeam.value = String(w.beam_size ?? 5);
           if (setWhisperVad) setWhisperVad.checked = !!w.vad_filter;
-
+          if (setBrowseLimit) setBrowseLimit.value = String(browseLimit);
           if (setMeiliTypo) setMeiliTypo.checked = (m.typo_tolerance !== false);
           if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify(m.synonyms || {}, null, 2);
-
           if (settingsStatus) settingsStatus.textContent = "Loaded.";
         }
 
@@ -520,6 +526,10 @@ Major UI Systems
           const language = (setWhisperLanguage?.value || "").trim();
           const beamSizeRaw = (setWhisperBeam?.value || "").trim();
           const vad = !!setWhisperVad?.checked;
+
+          let nextBrowseLimit = Number((setBrowseLimit?.value || "").trim() || 20);
+          if (!Number.isFinite(nextBrowseLimit)) nextBrowseLimit = 20;
+          nextBrowseLimit = Math.max(5, Math.min(100, Math.round(nextBrowseLimit)));
 
           let beam_size = 5;
           if (beamSizeRaw) {
@@ -553,6 +563,10 @@ Major UI Systems
           const data = await r.json();
           if (!r.ok || !data.ok) throw new Error(data.error || r.statusText);
 
+          browseLimit = nextBrowseLimit;
+          try { localStorage.setItem("strixnote_browse_limit", String(browseLimit)); } catch (e) { }
+          if (setBrowseLimit) setBrowseLimit.value = String(browseLimit);
+          if (settingsSaveBtn) settingsSaveBtn.disabled = false;
           if (settingsStatus) settingsStatus.textContent = "Saved.";
           return data.settings;
         }
@@ -568,7 +582,7 @@ Major UI Systems
         let currentTimelineFilename = "";
         let pendingBrowseTranscriptOpen = null;
         let pendingBrowseFileOpen = null;
-        const browseLimit = 20;
+        let browseLimit = Number(localStorage.getItem("strixnote_browse_limit") || 20);
 
         const BOOKMARKS_KEY = "strixnote_bookmarks";
 
