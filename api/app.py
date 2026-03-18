@@ -29,7 +29,7 @@ from datetime import datetime
 
 import subprocess
 import requests
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, send_file
 
 app = Flask(__name__)
 
@@ -37,6 +37,11 @@ app = Flask(__name__)
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 INCOMING_DIR = os.environ.get("INCOMING_DIR", f"{DATA_DIR}/incoming")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", f"{DATA_DIR}/processed")
+
+def make_clip_output_path(base_name: str) -> str:
+    safe = re.sub(r"[^a-zA-Z0-9._-]", "_", base_name)
+    ts = int(time.time())
+    return f"/tmp/{safe}_clip_{ts}.wav"
 
 MEILI_URL = os.environ.get("MEILI_URL", "http://meilisearch:7700")
 MEILI_MASTER_KEY = os.environ.get("MEILI_MASTER_KEY", "")
@@ -877,6 +882,60 @@ def delete():
 
     return jsonify(response), 200
 
+@app.post("/clip")
+def clip_audio():
+    try:
+        data = request.get_json(force=True)
+        filename = data.get("filename")
+        ranges = data.get("ranges") or []
+        mode = data.get("mode", "download")
+
+        if not filename or not ranges:
+            return jsonify({"ok": False, "error": "Missing filename or ranges"}), 400
+
+        input_path = os.path.join(PROCESSED_DIR, filename)
+        if not os.path.exists(input_path):
+            return jsonify({"ok": False, "error": "Source file not found"}), 404
+
+        # Build ffmpeg trim filters
+        filter_parts = []
+        concat_inputs = []
+        for i, r in enumerate(ranges):
+            start = float(r.get("startSec", 0))
+            end = float(r.get("endSec", start + 5))
+            filter_parts.append(f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]")
+            concat_inputs.append(f"[a{i}]")
+
+        filter_complex = ";".join(filter_parts)
+        filter_complex += f";{''.join(concat_inputs)}concat=n={len(ranges)}:v=0:a=1[out]"
+
+        output_path = make_clip_output_path(filename)
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", input_path,
+            "-filter_complex", filter_complex,
+            "-map", "[out]",
+            output_path
+        ]
+
+        subprocess.run(cmd, check=True)
+
+        if mode == "download":
+            return send_file(output_path, as_attachment=True)
+        elif mode == "reimport":
+            new_name = f"{Path(filename).stem}_clip_{int(time.time())}.wav"
+            incoming_path = os.path.join(INCOMING_DIR, new_name)
+            shutil.copy2(output_path, incoming_path)
+            return jsonify({"ok": True, "mode": "reimport", "filename": new_name})
+        else:
+            return jsonify({"ok": False, "error": "Mode not implemented yet"}), 400
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({"ok": False, "error": f"ffmpeg failed: {e}"}), 500
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.post("/reindex")
 def reindex():

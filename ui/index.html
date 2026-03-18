@@ -954,7 +954,7 @@ Major UI Systems
           });
         }
 
-        function renderTranscriptSegments(transcriptBox, segments, filename) {
+        function renderTranscriptSegments(transcriptBox, segments, filename, selectedClipSegments, refreshClipActions) {
           transcriptBox.innerHTML = "";
           transcriptBox.focus();
 
@@ -1105,6 +1105,35 @@ Major UI Systems
             row.appendChild(text);
             row.appendChild(copy);
 
+            const clip = document.createElement("span");
+            clip.className = "transcriptClip";
+            clip.title = "Add to clip";
+            clip.textContent = "✂️";
+
+            clip.addEventListener("click", (e) => {
+              e.stopPropagation();
+
+              const startSec = Math.floor(seg.startSec);
+              const key = `${filename}:${startSec}`;
+
+              if (selectedClipSegments.has(key)) {
+                selectedClipSegments.delete(key);
+                clip.classList.remove("active");
+                row.classList.remove("clip-selected");
+              } else {
+                selectedClipSegments.set(key, {
+                  startSec,
+                  endSec: seg.endSec
+                });
+                clip.classList.add("active");
+                row.classList.add("clip-selected");
+              }
+
+              refreshClipActions();
+            });
+
+            row.appendChild(clip);
+
             const bookmark = document.createElement("span");
             bookmark.className = "transcriptBookmark";
             bookmark.title = "Bookmark segment";
@@ -1186,6 +1215,26 @@ Major UI Systems
         }) {
           if (!textBtn || !transcriptWrap || !transcriptBox) return;
 
+          const clipActions = transcriptWrap.querySelector(".clipActions");
+          const clipSelectionCount = transcriptWrap.querySelector(".clipSelectionCount");
+          const clipClearBtn = transcriptWrap.querySelector(".btn-clip-clear");
+          const clipDownloadBtn = transcriptWrap.querySelector(".btn-clip-download");
+          const clipReimportBtn = transcriptWrap.querySelector(".btn-clip-reimport");
+
+          const selectedClipSegments = new Map();
+
+          const refreshClipActions = () => {
+            const count = selectedClipSegments.size;
+
+            if (clipSelectionCount) {
+              clipSelectionCount.textContent = `${count} clip segment${count === 1 ? "" : "s"} selected`;
+            }
+
+            if (clipActions) {
+              clipActions.style.display = count > 0 ? "flex" : "none";
+            }
+          };
+
           transcriptWrap.addEventListener("click", (e) => {
             e.stopPropagation();
           });
@@ -1193,6 +1242,92 @@ Major UI Systems
           transcriptBox.addEventListener("click", (e) => {
             e.stopPropagation();
           });
+
+          if (clipClearBtn && !clipClearBtn.dataset.wired) {
+            clipClearBtn.dataset.wired = "1";
+            clipClearBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+
+              selectedClipSegments.clear();
+
+              transcriptBox.querySelectorAll(".transcriptSeg").forEach(r => {
+                r.classList.remove("clip-selected");
+                const c = r.querySelector(".transcriptClip");
+                if (c) c.classList.remove("active");
+              });
+
+              refreshClipActions();
+            });
+          }
+
+          if (clipDownloadBtn && !clipDownloadBtn.dataset.wired) {
+            clipDownloadBtn.dataset.wired = "1";
+            clipDownloadBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+
+              const ranges = Array.from(selectedClipSegments.values())
+                .sort((a, b) => a.startSec - b.startSec);
+
+              const resp = await fetch("/api/clip", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  filename,
+                  mode: "download",
+                  ranges
+                })
+              });
+
+              if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                alert("Clip failed: " + (err.error || resp.statusText));
+                return;
+              }
+
+              const blob = await resp.blob();
+              const url = URL.createObjectURL(blob);
+
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = filename.replace(/\.\w+$/, "") + "_clip.wav";
+              document.body.appendChild(a);
+              a.click();
+
+              setTimeout(() => {
+                URL.revokeObjectURL(url);
+                a.remove();
+              }, 100);
+            });
+          }
+
+          if (clipReimportBtn && !clipReimportBtn.dataset.wired) {
+            clipReimportBtn.dataset.wired = "1";
+            clipReimportBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+
+              const ranges = Array.from(selectedClipSegments.values())
+                .sort((a, b) => a.startSec - b.startSec);
+
+              const resp = await fetch("/api/clip", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  filename,
+                  mode: "reimport",
+                  ranges
+                })
+              });
+
+              const data = await resp.json().catch(() => ({}));
+
+              if (!resp.ok || !data.ok) {
+                alert("Send to StrixNote failed: " + (data.error || resp.statusText));
+                return;
+              }
+
+              alert(`Clip sent to StrixNote as ${data.filename}`);
+            });
+          }
 
           const closeWrap = (w) => {
             w.classList.remove("open");
@@ -1225,7 +1360,7 @@ Major UI Systems
             currentTimelineSegments = segments;
             currentTimelineFilename = filename;
             renderSegmentTimeline(segments, filename);
-            renderTranscriptSegments(transcriptBox, segments, filename);
+            renderTranscriptSegments(transcriptBox, segments, filename, selectedClipSegments, refreshClipActions);
           };
 
           if (dlBtn && !dlBtn.dataset.wired) {
@@ -2135,6 +2270,26 @@ Major UI Systems
                </label>
               </div>
             </div>
+                <div class="clipActions small muted" style="display:none; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+                <div class="clipSelectionCount">0 clip segments selected</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <button class="btn btn-secondary btn-clip-clear"
+                    type="button"
+                    style="height:32px; display:inline-flex; align-items:center;">
+                    Clear
+                  </button>
+                  <button class="btn btn-secondary btn-clip-download"
+                    type="button"
+                    style="height:32px; display:inline-flex; align-items:center;">
+                    Download clip
+                  </button>
+                  <button class="btn btn-secondary btn-clip-reimport"
+                    type="button"
+                    style="height:32px; display:inline-flex; align-items:center;">
+                    Send to StrixNote
+                  </button>
+                </div>
+              </div>
  <div class="transcriptBox" tabindex="0"
      style="max-height:16em; overflow:auto; padding:12px 14px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface-elevated); white-space:pre-wrap; line-height:1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;">
           </div>
