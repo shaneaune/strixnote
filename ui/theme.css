@@ -318,10 +318,20 @@ a.btn {
   text-shadow: 0 0 4px rgba(79, 209, 197, 0.4);
 }
 
+.btn-bookmark,
+.btn-bookmark-seg,
+.btn-unbookmark-file,
+.btn-unbookmark-seg {
+  min-width: 110px;
+  justify-content: center;
+}
+
 .btn-bookmarked {
   background-color: var(--color-accent);
   color: #000;
   border-color: var(--color-accent);
+  min-width: 110px;
+  justify-content: center;
 }
 
 .transcriptSeg:hover .transcriptCopy,

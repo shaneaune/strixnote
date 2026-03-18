@@ -186,15 +186,17 @@ Major UI Systems
               faster. A value of 5 is a good general default.
             </div>
 
-            <label class="small muted"
-              style="display:flex; gap:8px; align-items:flex-start; margin-top:12px; cursor:pointer; user-select:none;">
-              <input id="setWhisperVad" type="checkbox" style="margin-top:3px;">
-              <div>
-                <div>VAD filter</div>
-                <div style="font-size:12px; opacity:0.8; margin-top:2px;">
-                  Removes silence before transcription. Faster, but may slightly affect timestamp alignment.
-                </div>
+            <div style="margin-top:12px;">
+              <div style="display:flex; align-items:flex-start;">
+                <input id="setWhisperVad" type="checkbox" style="margin-top:3px; margin-right:8px;">
+                <label for="setWhisperVad" class="small muted" style="cursor:pointer; user-select:none;">
+                  VAD filter
+                </label>
               </div>
+              <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px;">
+                Removes silence before transcription. Faster, but may slightly affect timestamp alignment.
+              </div>
+            </div>
             </label>
             <div class="small muted" style="margin:14px 0 6px;">Browse limit (5–100)</div>
             <input id="setBrowseLimit" type="number" min="5" max="100"
@@ -678,7 +680,7 @@ Major UI Systems
                       </button>
                         <button class="btn btn-secondary btn-unbookmark-file btn-bookmarked"
                         data-fn="${b.filename}">
-                        Unbookmark
+                        Bookmarked
                       </button>
                     </div>
                 </div>
@@ -720,7 +722,7 @@ Major UI Systems
                       </button>
                         <button class="btn btn-secondary btn-unbookmark-seg btn-bookmarked"
                         data-fn="${b.filename}">
-                        Unbookmark
+                        Bookmarked
                       </button>
                     </div>
                 </div>
@@ -1759,7 +1761,7 @@ Major UI Systems
                   type="button"
                   data-fn="${hit.filename}"
                   style="height:38px; display:inline-flex; align-items:center;">
-            ${isBookmarkedFile(hit.filename) ? "Unbookmark" : "Bookmark"}
+            ${isBookmarkedFile(hit.filename) ? "Bookmarked" : "Bookmark"}
           </button>        
 
         <a class="btn btn-secondary"
@@ -1843,7 +1845,7 @@ Major UI Systems
                   }
 
                   const active = isBookmarkedFile(hit.filename);
-                  bookmarkBtn.textContent = active ? "Unbookmark" : "Bookmark";
+                  bookmarkBtn.textContent = active ? "Bookmarked" : "Bookmark"
                   bookmarkBtn.classList.toggle("btn-bookmarked", active);
                 };
               }
@@ -1885,7 +1887,7 @@ Major UI Systems
                     <button class="btn btn-secondary btn-bookmark-seg ${isBookmarkedSegment(hit.filename, Math.floor((hit.start_ms || 0) / 1000)) ? "btn-bookmarked" : ""}"
                     type="button"
                     style="height:38px; display:inline-flex; align-items:center; white-space:nowrap;">
-                    ${isBookmarkedSegment(hit.filename, Math.floor((hit.start_ms || 0) / 1000)) ? "Unbookmark" : "Bookmark"}
+                    ${isBookmarkedSegment(hit.filename, Math.floor((hit.start_ms || 0) / 1000)) ? "Bookmarked" : "Bookmark"}
                   </button>
                 </div>            
             </div>
@@ -1918,7 +1920,7 @@ Major UI Systems
                   }
 
                   const active = isBookmarkedSegment(hit.filename, startSec);
-                  bookmarkSegBtn.textContent = active ? "Unbookmark" : "Bookmark";
+                  bookmarkSegBtn.textContent = active ? "Bookmarked" : "Bookmark"
                   bookmarkSegBtn.classList.toggle("btn-bookmarked", active);
                 };
               }
@@ -2097,7 +2099,7 @@ Major UI Systems
                 type="button"
                 data-fn="${hit.filename}"
                 style="height:38px; display:inline-flex; align-items:center;">
-                ${isBookmarkedFile(hit.filename) ? "Unbookmark" : "Bookmark"}
+                ${isBookmarkedFile(hit.filename) ? "Bookmarked" : "Bookmark"}
               </button>            
 
             <a class="btn btn-secondary"
@@ -2209,7 +2211,7 @@ Major UI Systems
                 }
 
                 const active = isBookmarkedFile(hit.filename);
-                bookmarkBtn.textContent = active ? "Unbookmark" : "Bookmark";
+                bookmarkBtn.textContent = active ? "Bookmarked" : "Bookmark"
                 bookmarkBtn.classList.toggle("btn-bookmarked", active);
               };
             }
