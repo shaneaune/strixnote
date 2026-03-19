@@ -1326,6 +1326,7 @@ Major UI Systems
               }
 
               alert(`Clip sent to StrixNote as ${data.filename}`);
+              pollClipReimport(data.filename);
             });
           }
 
@@ -2663,6 +2664,31 @@ Major UI Systems
 
           progressContainer.classList.remove("pulse");
           progressPhase.textContent = "Processing timeout.";
+        }
+
+        async function pollClipReimport(filename) {
+          const maxWaitMs = 30 * 60 * 1000; // 30 minutes safety
+          const start = Date.now();
+
+          while (Date.now() - start < maxWaitMs) {
+            try {
+              const r = await fetch(`/api/status?filename=${encodeURIComponent(filename)}`);
+              const data = await r.json();
+
+              if (data.state === "done") {
+                refreshBrowseIfVisible();
+                return;
+              }
+
+              if (data.state === "missing") {
+                return;
+              }
+            } catch (e) {
+              console.log("Clip reimport status poll error:", e);
+            }
+
+            await new Promise(r => setTimeout(r, 2000));
+          }
         }
 
         // ============================================================================
