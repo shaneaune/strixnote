@@ -2758,18 +2758,37 @@ Major UI Systems
               // Switch to pulse animation
               progressContainer.classList.add("pulse");
 
-              let uploadedName = null;
               try {
                 const data = JSON.parse(xhr.responseText || "{}");
-                uploadedName = (data.saved && data.saved[0] && data.saved[0].filename) ? data.saved[0].filename : null;
-              } catch (e) { }
+                const saved = Array.isArray(data.saved) ? data.saved : [];
+                const rejected = Array.isArray(data.rejected) ? data.rejected : [];
 
-              const toPoll = uploadedName || (input.files[0] ? input.files[0].name : "");
-              if (toPoll) {
-                await pollProcessing(toPoll, progressWrap, progressContainer, progressPhase);
-              } else {
+                const uploadedName = (saved[0] && saved[0].filename) ? saved[0].filename : null;
+
+                if (!saved.length && rejected.length) {
+                  progressContainer.classList.remove("pulse");
+
+                  const first = rejected[0];
+                  if (first.reason === "already exists") {
+                    progressPhase.textContent = `Upload skipped: ${first.filename} already exists.`;
+                  } else {
+                    progressPhase.textContent = `Upload rejected: ${first.filename} (${first.reason}).`;
+                  }
+
+                  btn.disabled = false;
+                  return;
+                }
+
+                const toPoll = uploadedName || (input.files[0] ? input.files[0].name : "");
+                if (toPoll) {
+                  await pollProcessing(toPoll, progressWrap, progressContainer, progressPhase);
+                } else {
+                  progressContainer.classList.remove("pulse");
+                  progressPhase.textContent = "Uploaded, but could not determine filename to track.";
+                }
+              } catch (e) {
                 progressContainer.classList.remove("pulse");
-                progressPhase.textContent = "Uploaded, but could not determine filename to track.";
+                progressPhase.textContent = "Upload response could not be read.";
               }
 
               input.value = "";
