@@ -1325,7 +1325,7 @@ Major UI Systems
                 return;
               }
 
-              alert(`Clip sent to StrixNote as ${data.filename}`);
+              alert(`Clip sent to StrixNote as ${data.filename}\n\nBrowse will refresh automatically when processing is complete.`);
               pollClipReimport(data.filename);
             });
           }
@@ -1932,6 +1932,26 @@ Major UI Systems
               </label>
             </div>
           </div>
+          <div class="clipActions small muted" style="display:none; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+              <div class="clipSelectionCount">0 clip segments selected</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button class="btn btn-secondary btn-clip-clear"
+                  type="button"
+                  style="height:32px; display:inline-flex; align-items:center;">
+                  Clear
+                </button>
+                <button class="btn btn-secondary btn-clip-download"
+                  type="button"
+                  style="height:32px; display:inline-flex; align-items:center;">
+                  Download clip
+                </button>
+                <button class="btn btn-secondary btn-clip-reimport"
+                  type="button"
+                  style="height:32px; display:inline-flex; align-items:center;">
+                  Send to StrixNote
+                </button>
+              </div>
+            </div>
       <div class="transcriptBox" tabindex="0"
      style="max-height:16em; overflow:auto; padding:12px 14px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface-elevated); white-space:pre-wrap; line-height:1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;">
         </div>
