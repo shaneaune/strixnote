@@ -1233,6 +1233,14 @@ Major UI Systems
             if (clipActions) {
               clipActions.style.display = count > 0 ? "flex" : "none";
             }
+
+            if (clipDownloadBtn) {
+              clipDownloadBtn.disabled = count === 0;
+            }
+
+            if (clipReimportBtn) {
+              clipReimportBtn.disabled = count === 0;
+            }
           };
 
           transcriptWrap.addEventListener("click", (e) => {
@@ -1280,7 +1288,10 @@ Major UI Systems
 
               if (!resp.ok) {
                 const err = await resp.json().catch(() => ({}));
-                alert("Clip failed: " + (err.error || resp.statusText));
+                const statusEl = div.querySelector(".clipStatus");
+                if (statusEl) {
+                  statusEl.textContent = "Clip download failed: " + (err.error || resp.statusText);
+                }
                 return;
               }
 
@@ -1321,11 +1332,17 @@ Major UI Systems
               const data = await resp.json().catch(() => ({}));
 
               if (!resp.ok || !data.ok) {
-                alert("Send to StrixNote failed: " + (data.error || resp.statusText));
+                const statusEl = div.querySelector(".clipStatus");
+                if (statusEl) {
+                  statusEl.textContent = "Send to StrixNote failed: " + (data.error || resp.statusText);
+                }
                 return;
               }
 
-              alert(`Clip sent to StrixNote as ${data.filename}\n\nBrowse will refresh automatically when processing is complete.`);
+              const statusEl = div.querySelector(".clipStatus");
+              if (statusEl) {
+                statusEl.textContent = `Clip sent to StrixNote as ${data.filename}. Browse will refresh automatically when processing is complete.`;
+              }
               pollClipReimport(data.filename);
             });
           }
@@ -1374,7 +1391,10 @@ Major UI Systems
                 const wantTs = !(tsToggle && tsToggle.checked);
                 await downloadTranscriptFile(base, wantTs);
               } catch (err) {
-                alert("Download failed: " + (err?.message || err));
+                const statusEl = div.querySelector(".clipStatus");
+                if (statusEl) {
+                  statusEl.textContent = "Transcript download failed: " + (err?.message || err);
+                }
               }
             });
           }
@@ -1915,7 +1935,7 @@ Major UI Systems
         </button>
       </div>
     </div>
-
+    <div class="rowStatus small muted" style="margin-top:6px;"></div>
           <div class="transcriptWrap" style="max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease; margin-top:10px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <div class="small muted">Transcript</div>
@@ -1980,7 +2000,10 @@ Major UI Systems
 
                   const data = await resp.json();
                   if (!resp.ok) {
-                    alert("Delete failed: " + (data.error || resp.statusText));
+                    const statusEl = div.querySelector(".rowStatus");
+                    if (statusEl) {
+                      statusEl.textContent = "Delete failed: " + (data.error || resp.statusText);
+                    }
                     return;
                   }
 
@@ -2293,6 +2316,7 @@ Major UI Systems
             </div>
                 <div class="clipActions small muted" style="display:none; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
                 <div class="clipSelectionCount">0 clip segments selected</div>
+                <div class="clipStatus small muted" style="margin-bottom:6px;"></div>
                 <div style="display:flex; gap:8px; align-items:center;">
                   <button class="btn btn-secondary btn-clip-clear"
                     type="button"
@@ -2368,7 +2392,10 @@ Major UI Systems
 
               const data = await resp.json();
               if (!resp.ok) {
-                alert("Delete failed: " + (data.error || resp.statusText));
+                const statusEl = div.querySelector(".rowStatus");
+                if (statusEl) {
+                  statusEl.textContent = "Delete failed: " + (data.error || resp.statusText);
+                }
                 return;
               }
 
@@ -2409,7 +2436,10 @@ Major UI Systems
                   const wantTs = !(tsToggle && tsToggle.checked);
                   await downloadTranscriptFile(base, wantTs);
                 } catch (err) {
-                  alert("Download failed: " + (err?.message || err));
+                  const statusEl = div.querySelector(".clipStatus");
+                  if (statusEl) {
+                    statusEl.textContent = "Transcript download failed: " + (err?.message || err);
+                  }
                 }
               });
             }
