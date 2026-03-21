@@ -2426,24 +2426,6 @@ Major UI Systems
 
             const dlBtn = div.querySelector(".btn-transcript-download");
 
-            if (dlBtn) {
-              dlBtn.addEventListener("click", async (e) => {
-                e.stopPropagation();
-
-                try {
-                  const fn = dlBtn.getAttribute("data-fn") || "";
-                  const base = baseName(fn);
-                  const wantTs = !(tsToggle && tsToggle.checked);
-                  await downloadTranscriptFile(base, wantTs);
-                } catch (err) {
-                  const statusEl = div.querySelector(".clipStatus");
-                  if (statusEl) {
-                    statusEl.textContent = "Transcript download failed: " + (err?.message || err);
-                  }
-                }
-              });
-            }
-
             wireTranscriptControls({
               div,
               filename: hit.filename,
