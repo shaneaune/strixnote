@@ -1155,6 +1155,7 @@ Major UI Systems
             row.style.display = "flex";
             row.style.alignItems = "center";
             row.dataset.startSec = String(Math.floor(seg.startSec));
+            row.dataset.endSec = String(Number(seg.endSec || seg.startSec));
 
             row.addEventListener("mouseenter", () => {
               document.querySelectorAll(".timelineMarker.hover").forEach(m => {
@@ -1715,49 +1716,53 @@ Major UI Systems
 
         function wireCaptions() {
           const tt = player.textTracks[0];
-          if (!tt) return;
-          tt.mode = "hidden";
+          if (tt) {
+            tt.mode = "hidden";
+          }
 
-          tt.addEventListener("cuechange", () => {
-            const cues = tt.activeCues;
+          player.ontimeupdate = () => {
+            const currentTime = Number(player.currentTime || 0);
 
             document.querySelectorAll(".transcriptSeg.active").forEach(el => {
               el.classList.remove("active");
             });
 
-            if (!cues || !cues.length) {
-              captionBox.textContent = "";
-              return;
-            }
-
-            const lastCue = cues[cues.length - 1];
-            captionBox.textContent = lastCue?.text || "";
-
             document.querySelectorAll(".timelineMarker.active").forEach(el => {
               el.classList.remove("active");
             });
 
-            const startSec = Math.floor(lastCue?.startTime || 0);
-            const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${startSec}"]`);
-            if (activeRow) {
-              activeRow.classList.add("active");
+            const transcriptRows = Array.from(document.querySelectorAll(".transcriptSeg"));
+            const activeRow = transcriptRows.find((row) => {
+              const rowStart = Number(row.dataset.startSec || 0);
+              const rowEnd = Number(row.dataset.endSec || rowStart);
+              return currentTime >= rowStart && currentTime < rowEnd;
+            });
 
-              const box = activeRow.closest(".transcriptBox");
-              if (box) {
-                const boxRect = box.getBoundingClientRect();
-                const rowRect = activeRow.getBoundingClientRect();
-                const rowTopInBox = rowRect.top - boxRect.top + box.scrollTop;
-                const targetTop = rowTopInBox - (box.clientHeight / 2) + (rowRect.height / 2);
-
-                box.scrollTop = Math.max(0, targetTop);
-              }
+            if (!activeRow) {
+              captionBox.textContent = "";
+              return;
             }
 
-            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${startSec}"]`);
+            activeRow.classList.add("active");
+
+            const textEl = activeRow.querySelector(".transcriptText");
+            captionBox.textContent = textEl ? String(textEl.textContent || "").trim() : "";
+
+            const box = activeRow.closest(".transcriptBox");
+            if (box) {
+              const boxRect = box.getBoundingClientRect();
+              const rowRect = activeRow.getBoundingClientRect();
+              const rowTopInBox = rowRect.top - boxRect.top + box.scrollTop;
+              const targetTop = rowTopInBox - (box.clientHeight / 2) + (rowRect.height / 2);
+
+              box.scrollTop = Math.max(0, targetTop);
+            }
+
+            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${Math.floor(Number(activeRow.dataset.startSec || 0))}"]`);
             if (activeMarker) {
               activeMarker.classList.add("active");
             }
-          });
+          };
         }
         function escapeHtml(str) {
           if (str == null) return "";
