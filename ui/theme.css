@@ -147,6 +147,9 @@ input[type="search"],
   height: 34px !important;
   min-width: 120px;
 }
+#setTranscriptSegmentation {
+  width: 240px !important;
+}
 
 input::placeholder {
   color: var(--color-text-muted);

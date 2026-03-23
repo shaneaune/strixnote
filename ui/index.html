@@ -197,12 +197,20 @@ Major UI Systems
                 Removes silence before transcription. Faster, but may slightly affect timestamp alignment.
               </div>
             </div>
-            </label>
             <div class="small muted" style="margin:14px 0 6px;">Browse limit (5–100)</div>
             <input id="setBrowseLimit" type="number" min="5" max="100"
               style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
             <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
               Controls how many results are shown per page in Browse and Search.
+            </div>
+            <div class="small muted" style="margin:14px 0 6px;">Transcript segmentation</div>
+            <select id="setTranscriptSegmentation"
+              style="width:240px; height:38px; padding:6px 10px; box-sizing:border-box;">
+              <option value="whisper">Whisper default</option>
+              <option value="postprocessed">Post-processed</option>
+            </select>
+            <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
+              Controls how transcript lines are segmented for display and clip selection.
             </div>
           </div>
 
@@ -437,6 +445,7 @@ Major UI Systems
         const setWhisperBeam = document.getElementById("setWhisperBeam");
         const setWhisperVad = document.getElementById("setWhisperVad");
         const setBrowseLimit = document.getElementById("setBrowseLimit");
+        const setTranscriptSegmentation = document.getElementById("setTranscriptSegmentation");
 
         const setMeiliTypo = document.getElementById("setMeiliTypo");
         const setMeiliSynonyms = document.getElementById("setMeiliSynonyms");
@@ -515,6 +524,8 @@ Major UI Systems
           if (setWhisperBeam) setWhisperBeam.value = String(w.beam_size ?? 5);
           if (setWhisperVad) setWhisperVad.checked = !!w.vad_filter;
           if (setBrowseLimit) setBrowseLimit.value = String(browseLimit);
+          if (setTranscriptSegmentation) setTranscriptSegmentation.value = (s.transcript_segmentation_mode || "whisper");
+          transcriptSegmentationModeValue = (s.transcript_segmentation_mode || "whisper");
           if (setMeiliTypo) setMeiliTypo.checked = (m.typo_tolerance !== false);
           if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify(m.synonyms || {}, null, 2);
           if (settingsStatus) settingsStatus.textContent = "Loaded.";
@@ -527,7 +538,10 @@ Major UI Systems
 
           const language = (setWhisperLanguage?.value || "").trim();
           const beamSizeRaw = (setWhisperBeam?.value || "").trim();
+          const transcriptSegmentation = (setTranscriptSegmentation?.value || "whisper");
           const vad = !!setWhisperVad?.checked;
+
+          let transcriptSegmentationModeValue = "whisper";
 
           let nextBrowseLimit = Number((setBrowseLimit?.value || "").trim() || 20);
           if (!Number.isFinite(nextBrowseLimit)) nextBrowseLimit = 20;
@@ -554,8 +568,11 @@ Major UI Systems
 
           const payload = {
             whisper: { language, beam_size, vad_filter: vad },
-            meili: { typo_tolerance, synonyms }
+            meili: { typo_tolerance, synonyms },
+            transcript_segmentation_mode: transcriptSegmentation
           };
+
+          transcriptSegmentationModeValue = transcriptSegmentation;
 
           const r = await fetch("/api/settings", {
             method: "PUT",
@@ -877,6 +894,8 @@ Major UI Systems
             if (line.includes("-->")) {
               const startStr = line.split("-->")[0].trim();
               const startSec = vttTimeToSeconds(startStr);
+              const endStr = line.split("-->")[1].trim().split(" ")[0];
+              const endSec = vttTimeToSeconds(endStr);
 
               i++;
               const textLines = [];
@@ -890,6 +909,7 @@ Major UI Systems
               if (txt) {
                 out.push({
                   startSec,
+                  endSec,
                   startLabel: secondsToHMS(startSec),
                   text: txt,
                 });
@@ -897,6 +917,115 @@ Major UI Systems
             } else {
               i++;
             }
+          }
+          return out;
+        }
+
+        function normalizeTranscriptSegments(rawSegments) {
+          if (!Array.isArray(rawSegments) || !rawSegments.length) return [];
+
+          const out = [];
+          let current = null;
+          const hardMaxSec = 12;
+
+          const splitCompletedSentences = (text) => {
+            let remaining = String(text || "").trim();
+            const complete = [];
+
+            while (true) {
+              const m = remaining.match(/^(.*?[.!?]["')\]]*)(?:\s+|$)([\s\S]*)$/);
+              if (!m) break;
+
+              const sentence = (m[1] || "").trim();
+              if (!sentence) break;
+
+              complete.push(sentence);
+              remaining = (m[2] || "").trim();
+            }
+
+            return { complete, remaining };
+          };
+
+          const emitSentences = (startSec, endSec, sentences) => {
+            if (!sentences.length) return startSec;
+
+            const totalDur = Math.max(0, endSec - startSec);
+            const totalChars = Math.max(
+              1,
+              sentences.reduce((n, s) => n + String(s || "").length, 0)
+            );
+
+            let cursor = startSec;
+
+            sentences.forEach((sentence, idx) => {
+              const isLast = idx === sentences.length - 1;
+              const sliceDur = isLast
+                ? Math.max(0, endSec - cursor)
+                : totalDur * (String(sentence || "").length / totalChars);
+
+              const segEnd = isLast ? endSec : Math.min(endSec, cursor + sliceDur);
+
+              out.push({
+                startSec: cursor,
+                endSec: segEnd,
+                startLabel: secondsToHMS(cursor),
+                text: sentence,
+              });
+
+              cursor = segEnd;
+            });
+
+            return cursor;
+          };
+
+          for (const seg of rawSegments) {
+            const startSec = Number(seg?.startSec || 0);
+            const endSec = Number(seg?.endSec || startSec);
+            const text = String(seg?.text || "").trim();
+            if (!text) continue;
+
+            if (!current) {
+              current = { startSec, endSec, text };
+            } else {
+              current.endSec = endSec;
+              current.text = `${current.text} ${text}`.replace(/\s+/g, " ").trim();
+            }
+
+            const split = splitCompletedSentences(current.text);
+
+            if (split.complete.length) {
+              const lastEnd = emitSentences(current.startSec, current.endSec, split.complete);
+
+              if (split.remaining) {
+                current = {
+                  startSec: lastEnd,
+                  endSec: current.endSec,
+                  text: split.remaining,
+                };
+              } else {
+                current = null;
+              }
+            } else {
+              const duration = current.endSec - current.startSec;
+              if (duration >= hardMaxSec) {
+                out.push({
+                  startSec: current.startSec,
+                  endSec: current.endSec,
+                  startLabel: secondsToHMS(current.startSec),
+                  text: current.text,
+                });
+                current = null;
+              }
+            }
+          }
+
+          if (current) {
+            out.push({
+              startSec: current.startSec,
+              endSec: current.endSec,
+              startLabel: secondsToHMS(current.startSec),
+              text: current.text,
+            });
           }
 
           return out;
@@ -1369,7 +1498,12 @@ Major UI Systems
             }
 
             const vtt = await fetchTranscriptVtt(base);
-            const segments = parseVttSegmentsForTranscript(vtt);
+            const rawSegments = parseVttSegmentsForTranscript(vtt);
+            const segmentationMode = transcriptSegmentationModeValue || "whisper";
+            console.log("Transcript segmentation mode:", segmentationMode);
+            const segments = segmentationMode === "postprocessed"
+              ? rawSegments
+              : normalizeTranscriptSegments(rawSegments);
 
             if (!segments.length) {
               transcriptBox.textContent = "(empty)";

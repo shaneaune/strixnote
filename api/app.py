@@ -1083,6 +1083,7 @@ DEFAULT_SETTINGS = {
         "typo_tolerance": True,  # bool
         "synonyms": {},  # dict[str, list[str]]
     },
+    "transcript_segmentation_mode": "whisper",
     "meta": {
         "last_reindex": "",
     },
@@ -1195,6 +1196,10 @@ def validate_settings(raw: dict) -> dict:
             if vals:
                 syn_out[k] = vals
     cleaned["meili"]["synonyms"] = syn_out
+    seg_mode = raw.get("transcript_segmentation_mode", DEFAULT_SETTINGS["transcript_segmentation_mode"])
+    if seg_mode not in ("whisper", "postprocessed"):
+        seg_mode = DEFAULT_SETTINGS["transcript_segmentation_mode"]
+    cleaned["transcript_segmentation_mode"] = seg_mode
 
     # meta.last_reindex: string timestamp
     meta = raw.get("meta") or {}
