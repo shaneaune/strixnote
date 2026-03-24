@@ -1208,6 +1208,42 @@ def validate_settings(raw: dict) -> dict:
         seg_mode = DEFAULT_SETTINGS["transcript_segmentation_mode"]
     cleaned["transcript_segmentation_mode"] = seg_mode
 
+    tp = raw.get("transcript_postprocess") or {}
+
+    punctuation = tp.get("punctuation", DEFAULT_SETTINGS["transcript_postprocess"]["punctuation"])
+    if punctuation is None:
+        punctuation = DEFAULT_SETTINGS["transcript_postprocess"]["punctuation"]
+    if not isinstance(punctuation, str):
+        punctuation = str(punctuation)
+    punctuation = punctuation.strip() or DEFAULT_SETTINGS["transcript_postprocess"]["punctuation"]
+    cleaned["transcript_postprocess"]["punctuation"] = punctuation
+
+    ignore = tp.get("ignore_abbreviations", DEFAULT_SETTINGS["transcript_postprocess"]["ignore_abbreviations"])
+    if isinstance(ignore, str):
+        ignore = [x.strip() for x in ignore.split(",")]
+    if not isinstance(ignore, (list, tuple)):
+        ignore = DEFAULT_SETTINGS["transcript_postprocess"]["ignore_abbreviations"]
+    ignore_out = []
+    for item in ignore:
+        if item is None:
+            continue
+        s = item if isinstance(item, str) else str(item)
+        s = s.strip()
+        if s and s not in ignore_out:
+            ignore_out.append(s)
+    cleaned["transcript_postprocess"]["ignore_abbreviations"] = ignore_out
+
+    max_sec = tp.get("max_segment_seconds", DEFAULT_SETTINGS["transcript_postprocess"]["max_segment_seconds"])
+    try:
+        max_sec = int(max_sec)
+    except Exception:
+        max_sec = DEFAULT_SETTINGS["transcript_postprocess"]["max_segment_seconds"]
+    if max_sec < 4:
+        max_sec = 4
+    if max_sec > 60:
+        max_sec = 60
+    cleaned["transcript_postprocess"]["max_segment_seconds"] = max_sec
+
     # meta.last_reindex: string timestamp
     meta = raw.get("meta") or {}
     last_reindex = meta.get("last_reindex", DEFAULT_SETTINGS["meta"]["last_reindex"])

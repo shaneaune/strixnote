@@ -223,10 +223,11 @@ Major UI Systems
             </div>
 
             <div class="small muted" style="margin:14px 0 6px;">Ignore abbreviations</div>
-            <textarea id="setTranscriptIgnore" placeholder="Mr.,Mrs.,Dr.,Prof.,Sr.,Jr.,St.,vs.,etc."
+            <textarea id="setTranscriptIgnore"
               style="width:100%; min-height:80px; padding:8px; box-sizing:border-box; border:1px solid var(--color-border); border-radius:8px; font-family:monospace;"></textarea>
             <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
-              Comma-separated list. Periods in these will not trigger sentence splits.
+              Comma-separated list. Periods in these will not trigger sentence splits. Example:
+              Mr.,Mrs.,Dr.,Prof.,Sr.,Jr.,St.,vs.,etc.
             </div>
 
             <div class="small muted" style="margin:14px 0 6px;">Max segment length (seconds)</div>
@@ -605,7 +606,18 @@ Major UI Systems
           const payload = {
             whisper: { language, beam_size, vad_filter: vad },
             meili: { typo_tolerance, synonyms },
-            transcript_segmentation_mode: transcriptSegmentation
+            transcript_segmentation_mode: transcriptSegmentation,
+            transcript_postprocess: {
+              punctuation: (setTranscriptPunctuation?.value || ".?!").trim() || ".?!",
+              ignore_abbreviations: (setTranscriptIgnore?.value || "")
+                .split(",")
+                .map(s => s.trim())
+                .filter(Boolean),
+              max_segment_seconds: Math.max(
+                4,
+                Math.min(60, Number(setTranscriptMaxSec?.value || 12) || 12)
+              )
+            }
           };
 
           transcriptSegmentationModeValue = transcriptSegmentation;
@@ -623,6 +635,13 @@ Major UI Systems
           });
           const data = await r.json();
           if (!r.ok || !data.ok) throw new Error(data.error || r.statusText);
+
+          transcriptPunctuationValue = (setTranscriptPunctuation?.value || ".?!").trim() || ".?!";
+          transcriptIgnoreValue = (setTranscriptIgnore?.value || "")
+            .split(",")
+            .map(s => s.trim())
+            .filter(Boolean);
+          transcriptMaxSecValue = Number(setTranscriptMaxSec?.value || 12) || 12;
 
           browseLimit = nextBrowseLimit;
           try { localStorage.setItem("strixnote_browse_limit", String(browseLimit)); } catch (e) { }
