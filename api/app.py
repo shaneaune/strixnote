@@ -1215,7 +1215,7 @@ def validate_settings(raw: dict) -> dict:
         punctuation = DEFAULT_SETTINGS["transcript_postprocess"]["punctuation"]
     if not isinstance(punctuation, str):
         punctuation = str(punctuation)
-    punctuation = punctuation.strip() or DEFAULT_SETTINGS["transcript_postprocess"]["punctuation"]
+    punctuation = punctuation.strip()
     cleaned["transcript_postprocess"]["punctuation"] = punctuation
 
     ignore = tp.get("ignore_abbreviations", DEFAULT_SETTINGS["transcript_postprocess"]["ignore_abbreviations"])

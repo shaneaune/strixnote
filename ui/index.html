@@ -558,10 +558,10 @@ Major UI Systems
           transcriptSegmentationModeValue = (s.transcript_segmentation_mode || "whisper");
 
           const tp = s.transcript_postprocess || {};
-          if (setTranscriptPunctuation) setTranscriptPunctuation.value = (tp.punctuation || ".?!");
+          if (setTranscriptPunctuation) setTranscriptPunctuation.value = (tp.punctuation ?? "");
           if (setTranscriptIgnore) setTranscriptIgnore.value = (Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations.join(",") : "");
           if (setTranscriptMaxSec) setTranscriptMaxSec.value = String(tp.max_segment_seconds ?? 12);
-          transcriptPunctuationValue = (tp.punctuation || ".?!");
+          transcriptPunctuationValue = (tp.punctuation ?? "");
           transcriptIgnoreValue = Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations : [];
           transcriptMaxSecValue = Number(tp.max_segment_seconds ?? 12) || 12;
 
@@ -608,7 +608,7 @@ Major UI Systems
             meili: { typo_tolerance, synonyms },
             transcript_segmentation_mode: transcriptSegmentation,
             transcript_postprocess: {
-              punctuation: (setTranscriptPunctuation?.value || ".?!").trim() || ".?!",
+              punctuation: (setTranscriptPunctuation?.value ?? "").trim(),
               ignore_abbreviations: (setTranscriptIgnore?.value || "")
                 .split(",")
                 .map(s => s.trim())
@@ -3136,7 +3136,7 @@ Major UI Systems
               const tp = s.transcript_postprocess || {};
 
               transcriptSegmentationModeValue = s.transcript_segmentation_mode || "postprocessed";
-              transcriptPunctuationValue = tp.punctuation || ".?!";
+              transcriptPunctuationValue = (tp.punctuation ?? "");
               transcriptIgnoreValue = Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations : [];
               transcriptMaxSecValue = Number(tp.max_segment_seconds ?? 12) || 12;
             }
