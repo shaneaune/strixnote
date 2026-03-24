@@ -1083,7 +1083,14 @@ DEFAULT_SETTINGS = {
         "typo_tolerance": True,  # bool
         "synonyms": {},  # dict[str, list[str]]
     },
-    "transcript_segmentation_mode": "whisper",
+    "transcript_segmentation_mode": "postprocessed",
+    "transcript_postprocess": {
+        "punctuation": ".?!",
+        "ignore_abbreviations": [
+            "Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Sr.", "Jr.", "St.", "vs.", "etc."
+        ],
+        "max_segment_seconds": 12,
+    },
     "meta": {
         "last_reindex": "",
     },

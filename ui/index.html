@@ -212,6 +212,27 @@ Major UI Systems
             <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
               Controls how transcript lines are segmented for display and clip selection.
             </div>
+
+            <div style="margin-top:16px; font-weight:600;">Transcript post-processing</div>
+
+            <div class="small muted" style="margin:10px 0 6px;">Sentence break punctuation</div>
+            <input id="setTranscriptPunctuation" placeholder=".?!"
+              style="width:240px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+            <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
+              Characters that define sentence endings. Example: .?!
+            </div>
+
+            <div class="small muted" style="margin:14px 0 6px;">Ignore abbreviations</div>
+            <textarea id="setTranscriptIgnore" placeholder="Mr.,Mrs.,Dr.,Prof.,Sr.,Jr.,St.,vs.,etc."
+              style="width:100%; min-height:80px; padding:8px; box-sizing:border-box; border:1px solid var(--color-border); border-radius:8px; font-family:monospace;"></textarea>
+            <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
+              Comma-separated list. Periods in these will not trigger sentence splits.
+            </div>
+
+            <div class="small muted" style="margin:14px 0 6px;">Max segment length (seconds)</div>
+            <input id="setTranscriptMaxSec" type="number" min="4" max="60"
+              style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+
           </div>
 
           <div style="min-width:360px; flex:1; margin-top:24px;">
@@ -447,6 +468,14 @@ Major UI Systems
         const setBrowseLimit = document.getElementById("setBrowseLimit");
         const setTranscriptSegmentation = document.getElementById("setTranscriptSegmentation");
 
+        const setTranscriptPunctuation = document.getElementById("setTranscriptPunctuation");
+        const setTranscriptIgnore = document.getElementById("setTranscriptIgnore");
+        const setTranscriptMaxSec = document.getElementById("setTranscriptMaxSec");
+
+        let transcriptPunctuationValue = ".?!";
+        let transcriptIgnoreValue = [];
+        let transcriptMaxSecValue = 12;
+
         const setMeiliTypo = document.getElementById("setMeiliTypo");
         const setMeiliSynonyms = document.getElementById("setMeiliSynonyms");
 
@@ -526,6 +555,15 @@ Major UI Systems
           if (setBrowseLimit) setBrowseLimit.value = String(browseLimit);
           if (setTranscriptSegmentation) setTranscriptSegmentation.value = (s.transcript_segmentation_mode || "whisper");
           transcriptSegmentationModeValue = (s.transcript_segmentation_mode || "whisper");
+
+          const tp = s.transcript_postprocess || {};
+          if (setTranscriptPunctuation) setTranscriptPunctuation.value = (tp.punctuation || ".?!");
+          if (setTranscriptIgnore) setTranscriptIgnore.value = (Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations.join(",") : "");
+          if (setTranscriptMaxSec) setTranscriptMaxSec.value = String(tp.max_segment_seconds ?? 12);
+          transcriptPunctuationValue = (tp.punctuation || ".?!");
+          transcriptIgnoreValue = Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations : [];
+          transcriptMaxSecValue = Number(tp.max_segment_seconds ?? 12) || 12;
+
           if (setMeiliTypo) setMeiliTypo.checked = (m.typo_tolerance !== false);
           if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify(m.synonyms || {}, null, 2);
           if (settingsStatus) settingsStatus.textContent = "Loaded.";
@@ -602,6 +640,7 @@ Major UI Systems
         let pendingBrowseTranscriptOpen = null;
         let pendingBrowseFileOpen = null;
         let browseLimit = Number(localStorage.getItem("strixnote_browse_limit") || 20);
+        let transcriptSegmentationModeValue = "postprocessed";
 
         const BOOKMARKS_KEY = "strixnote_bookmarks";
 
@@ -924,23 +963,48 @@ Major UI Systems
         function normalizeTranscriptSegments(rawSegments) {
           if (!Array.isArray(rawSegments) || !rawSegments.length) return [];
 
-          const out = [];
           let current = null;
-          const hardMaxSec = 12;
+          const out = [];
+
+          const punctuationChars = transcriptPunctuationValue;
+          const ignoreAbbreviations = transcriptIgnoreValue;
+          let hardMaxSec = Number(transcriptMaxSecValue);
+          if (!Number.isFinite(hardMaxSec)) hardMaxSec = 12;
 
           const splitCompletedSentences = (text) => {
             let remaining = String(text || "").trim();
             const complete = [];
 
-            while (true) {
-              const m = remaining.match(/^(.*?[.!?]["')\]]*)(?:\s+|$)([\s\S]*)$/);
-              if (!m) break;
+            while (remaining) {
+              let splitIdx = -1;
 
-              const sentence = (m[1] || "").trim();
+              for (let i = 0; i < remaining.length; i++) {
+                const ch = remaining[i];
+                if (!punctuationChars.includes(ch)) continue;
+
+                let endIdx = i + 1;
+                while (endIdx < remaining.length && /["')\]]/.test(remaining[endIdx])) {
+                  endIdx++;
+                }
+
+                const candidate = remaining.slice(0, endIdx).trim();
+                const normalizedCandidate = candidate.replace(/["')\]]+$/, "");
+
+                if (ignoreAbbreviations.some(abbr => normalizedCandidate.endsWith(abbr))) {
+                  continue;
+                }
+
+                splitIdx = endIdx;
+                break;
+              }
+
+              if (splitIdx === -1) break;
+
+              const sentence = remaining.slice(0, splitIdx).trim();
               if (!sentence) break;
 
               complete.push(sentence);
-              remaining = (m[2] || "").trim();
+              remaining = remaining.slice(splitIdx).trim();
             }
 
             return { complete, remaining };
@@ -1503,8 +1567,8 @@ Major UI Systems
             const segmentationMode = transcriptSegmentationModeValue || "whisper";
             console.log("Transcript segmentation mode:", segmentationMode);
             const segments = segmentationMode === "postprocessed"
-              ? rawSegments
-              : normalizeTranscriptSegments(rawSegments);
+              ? normalizeTranscriptSegments(rawSegments)
+              : rawSegments;
 
             if (!segments.length) {
               transcriptBox.textContent = "(empty)";
@@ -1565,7 +1629,7 @@ Major UI Systems
                 transcriptBox.dataset.loaded = "1";
                 transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
               } catch (err) {
-                transcriptBox.textContent = "Failed to load transcript.";
+                transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
               }
             }
 
@@ -1580,7 +1644,7 @@ Major UI Systems
                   await renderTranscript();
                   transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
                 } catch (err) {
-                  transcriptBox.textContent = "Failed to load transcript.";
+                  transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
                 }
               });
             }
@@ -3025,6 +3089,20 @@ Major UI Systems
         };
 
         (async () => {
+          try {
+            const r = await fetch("/api/settings");
+            const data = await r.json();
+            if (r.ok && data.ok) {
+              const s = data.settings || {};
+              const tp = s.transcript_postprocess || {};
+
+              transcriptSegmentationModeValue = s.transcript_segmentation_mode || "postprocessed";
+              transcriptPunctuationValue = tp.punctuation || ".?!";
+              transcriptIgnoreValue = Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations : [];
+              transcriptMaxSecValue = Number(tp.max_segment_seconds ?? 12) || 12;
+            }
+          } catch (e) { }
+
           await tabBrowse.onclick();
         })();
 
