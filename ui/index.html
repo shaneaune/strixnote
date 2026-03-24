@@ -167,7 +167,7 @@ Major UI Systems
       <div id="settingsWrap" class="panel" style="display:none; margin-top:10px;">
         <div style="font-weight:600; margin-bottom:10px;">Settings</div>
         <div class="small muted" style="margin:-4px 0 12px; opacity:0.85;">
-          Changes apply to new files only. Files already transcribing will not be affected.
+          Changes apply to new files only. Files already transcribing will not be affected. Be sure to Save after any change.
         </div>
         <div class="row" style="gap:24px; align-items:flex-start; flex-wrap:wrap;">
           <div style="min-width:320px; flex:1;">
@@ -477,6 +477,12 @@ Major UI Systems
         let transcriptIgnoreValue = [];
         let transcriptMaxSecValue = 12;
 
+        function applyTranscriptPostprocess(tp) {
+          transcriptPunctuationValue = (tp?.punctuation ?? "");
+          transcriptIgnoreValue = Array.isArray(tp?.ignore_abbreviations) ? tp.ignore_abbreviations : [];
+          transcriptMaxSecValue = Number(tp?.max_segment_seconds ?? 12) || 12;
+        }
+
         const setMeiliTypo = document.getElementById("setMeiliTypo");
         const setMeiliSynonyms = document.getElementById("setMeiliSynonyms");
 
@@ -554,16 +560,14 @@ Major UI Systems
           if (setWhisperBeam) setWhisperBeam.value = String(w.beam_size ?? 5);
           if (setWhisperVad) setWhisperVad.checked = !!w.vad_filter;
           if (setBrowseLimit) setBrowseLimit.value = String(browseLimit);
-          if (setTranscriptSegmentation) setTranscriptSegmentation.value = (s.transcript_segmentation_mode || "whisper");
-          transcriptSegmentationModeValue = (s.transcript_segmentation_mode || "whisper");
+          if (setTranscriptSegmentation) setTranscriptSegmentation.value = (s.transcript_segmentation_mode || "postprocessed");
+          transcriptSegmentationModeValue = (s.transcript_segmentation_mode || "postprocessed");
 
           const tp = s.transcript_postprocess || {};
           if (setTranscriptPunctuation) setTranscriptPunctuation.value = (tp.punctuation ?? "");
           if (setTranscriptIgnore) setTranscriptIgnore.value = (Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations.join(",") : "");
           if (setTranscriptMaxSec) setTranscriptMaxSec.value = String(tp.max_segment_seconds ?? 12);
-          transcriptPunctuationValue = (tp.punctuation ?? "");
-          transcriptIgnoreValue = Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations : [];
-          transcriptMaxSecValue = Number(tp.max_segment_seconds ?? 12) || 12;
+          applyTranscriptPostprocess(tp);
 
           if (setMeiliTypo) setMeiliTypo.checked = (m.typo_tolerance !== false);
           if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify(m.synonyms || {}, null, 2);
@@ -636,12 +640,7 @@ Major UI Systems
           const data = await r.json();
           if (!r.ok || !data.ok) throw new Error(data.error || r.statusText);
 
-          transcriptPunctuationValue = (setTranscriptPunctuation?.value || ".?!").trim() || ".?!";
-          transcriptIgnoreValue = (setTranscriptIgnore?.value || "")
-            .split(",")
-            .map(s => s.trim())
-            .filter(Boolean);
-          transcriptMaxSecValue = Number(setTranscriptMaxSec?.value || 12) || 12;
+          applyTranscriptPostprocess(payload.transcript_postprocess);
 
           browseLimit = nextBrowseLimit;
           try { localStorage.setItem("strixnote_browse_limit", String(browseLimit)); } catch (e) { }
@@ -1256,7 +1255,7 @@ Major UI Systems
             rows.push(row);
             row.className = "transcriptSeg";
             row.style.display = "flex";
-            row.style.alignItems = "center";
+            row.style.alignItems = "flex-start";
             row.dataset.startSec = String(Math.floor(seg.startSec));
             row.dataset.endSec = String(Number(seg.endSec || seg.startSec));
 
@@ -1299,7 +1298,7 @@ Major UI Systems
 
             const text = document.createElement("span");
             text.className = "transcriptText";
-            text.textContent = "  " + seg.text;
+            text.textContent = seg.text;
             text.style.flex = "1";
             text.style.minWidth = "0";
 
@@ -3136,9 +3135,7 @@ Major UI Systems
               const tp = s.transcript_postprocess || {};
 
               transcriptSegmentationModeValue = s.transcript_segmentation_mode || "postprocessed";
-              transcriptPunctuationValue = (tp.punctuation ?? "");
-              transcriptIgnoreValue = Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations : [];
-              transcriptMaxSecValue = Number(tp.max_segment_seconds ?? 12) || 12;
+              applyTranscriptPostprocess(tp);
             }
           } catch (e) { }
 
