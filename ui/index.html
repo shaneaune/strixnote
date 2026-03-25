@@ -474,14 +474,20 @@ Major UI Systems
         const setTranscriptIgnore = document.getElementById("setTranscriptIgnore");
         const setTranscriptMaxSec = document.getElementById("setTranscriptMaxSec");
 
-        let transcriptPunctuationValue = ".?!";
-        let transcriptIgnoreValue = [];
-        let transcriptMaxSecValue = 12;
+        const TRANSCRIPT_DEFAULTS = {
+          punctuation: ".?!",
+          ignore: [],
+          maxSec: 30
+        };
+
+        let transcriptPunctuationValue = TRANSCRIPT_DEFAULTS.punctuation;
+        let transcriptIgnoreValue = TRANSCRIPT_DEFAULTS.ignore;
+        let transcriptMaxSecValue = TRANSCRIPT_DEFAULTS.maxSec;
 
         function applyTranscriptPostprocess(tp) {
           transcriptPunctuationValue = (tp?.punctuation ?? "");
           transcriptIgnoreValue = Array.isArray(tp?.ignore_abbreviations) ? tp.ignore_abbreviations : [];
-          transcriptMaxSecValue = Number(tp?.max_segment_seconds ?? 12) || 12;
+          transcriptMaxSecValue = Number(tp?.max_segment_seconds ?? TRANSCRIPT_DEFAULTS.maxSec) || TRANSCRIPT_DEFAULTS.maxSec;
         }
 
         const setMeiliTypo = document.getElementById("setMeiliTypo");
@@ -567,7 +573,7 @@ Major UI Systems
           const tp = s.transcript_postprocess || {};
           if (setTranscriptPunctuation) setTranscriptPunctuation.value = (tp.punctuation ?? "");
           if (setTranscriptIgnore) setTranscriptIgnore.value = (Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations.join(",") : "");
-          if (setTranscriptMaxSec) setTranscriptMaxSec.value = String(tp.max_segment_seconds ?? 12);
+          if (setTranscriptMaxSec) setTranscriptMaxSec.value = String(tp.max_segment_seconds ?? TRANSCRIPT_DEFAULTS.maxSec);
           applyTranscriptPostprocess(tp);
 
           if (setMeiliTypo) setMeiliTypo.checked = (m.typo_tolerance !== false);
@@ -620,7 +626,7 @@ Major UI Systems
                 .filter(Boolean),
               max_segment_seconds: Math.max(
                 4,
-                Math.min(60, Number(setTranscriptMaxSec?.value || 12) || 12)
+                Math.min(60, Number(setTranscriptMaxSec?.value || TRANSCRIPT_DEFAULTS.maxSec) || TRANSCRIPT_DEFAULTS.maxSec)
               )
             }
           };
@@ -1009,7 +1015,7 @@ Major UI Systems
           const ignoreAbbreviations = transcriptIgnoreValue;
           let hardMaxSec = Number(transcriptMaxSecValue);
           console.log("normalizeTranscriptSegments hardMaxSec =", hardMaxSec);
-          if (!Number.isFinite(hardMaxSec)) hardMaxSec = 12;
+          if (!Number.isFinite(hardMaxSec)) hardMaxSec = TRANSCRIPT_DEFAULTS.maxSec;
 
           const splitCompletedSentences = (text) => {
             let remaining = String(text || "").trim();
@@ -1176,7 +1182,7 @@ Major UI Systems
 
           return out;
         }
-        
+
         async function fetchTranscriptVtt(base) {
           const r = await fetch("/audio/" + encodeURIComponent(base + ".vtt"));
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
