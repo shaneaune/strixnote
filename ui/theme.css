@@ -146,7 +146,11 @@ input[type="search"],
   font-size: 14px !important;
   height: 34px !important;
   min-width: 120px;
+  background: #ffffff !important;
+  color: #111111 !important;
+  border: 1px solid #cfcfcf !important;
 }
+
 #setTranscriptSegmentation {
   width: 240px !important;
 }
