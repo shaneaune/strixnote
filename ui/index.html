@@ -1519,8 +1519,28 @@ Major UI Systems
           return vttToTimestampedText(vtt) || emptyFallback;
         }
 
-        async function downloadTranscriptFile(base, wantTs) {
-          const text = await fetchTranscriptText(base, wantTs, "");
+        function transcriptSegmentsToText(segments, wantTs) {
+          const list = Array.isArray(segments) ? segments : [];
+          if (!list.length) return "";
+
+          if (!wantTs) {
+            return list.map(seg => String(seg?.text || "").trim()).filter(Boolean).join("\n");
+          }
+
+          return list
+            .map(seg => `${seg.startLabel}  ${String(seg?.text || "").trim()}`)
+            .join("\n");
+        }
+
+        async function downloadTranscriptFile(base, wantTs, processedSegments = null) {
+          let text = "";
+
+          if (Array.isArray(processedSegments) && processedSegments.length && wantTs) {
+            text = transcriptSegmentsToText(processedSegments, true);
+          } else {
+            text = await fetchTranscriptText(base, wantTs, "");
+          }
+
           const filename = wantTs ? `${base}_timestamps.txt` : `${base}.txt`;
 
           const blob = new Blob([text], { type: "text/plain" });
@@ -1727,7 +1747,12 @@ Major UI Systems
               try {
                 const base = baseName(filename || "");
                 const wantTs = !(tsToggle && tsToggle.checked);
-                await downloadTranscriptFile(base, wantTs);
+                const processedSegments = (wantTs &&
+                  transcriptSegmentationModeValue === "postprocessed" &&
+                  currentTimelineFilename === filename)
+                  ? currentTimelineSegments
+                  : null;
+                await downloadTranscriptFile(base, wantTs, processedSegments);
               } catch (err) {
                 const statusEl = div.querySelector(".clipStatus");
                 if (statusEl) {
