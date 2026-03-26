@@ -2973,12 +2973,25 @@ Major UI Systems
         if (settingsResetBtn) {
           settingsResetBtn.onclick = async () => {
             try {
-              // Reset form fields to defaults
+              // Whisper defaults
+              if (setWhisperLanguage) setWhisperLanguage.value = "";
+              if (setWhisperBeam) setWhisperBeam.value = "5";
+              if (setWhisperVad) setWhisperVad.checked = false;
+
+              // Browse defaults
+              if (setBrowseLimit) setBrowseLimit.value = "20";
+
+              // Transcript defaults
               if (setTranscriptSegmentation) setTranscriptSegmentation.value = "postprocessed";
               if (setTranscriptPunctuation) setTranscriptPunctuation.value = TRANSCRIPT_DEFAULTS.punctuation;
               if (setTranscriptIgnore) setTranscriptIgnore.value = "Mr.,Mrs.,Ms.,Dr.,Prof.,Sr.,Jr.,St.,vs.,etc.";
               if (setTranscriptMaxSec) setTranscriptMaxSec.value = String(TRANSCRIPT_DEFAULTS.maxSec);
 
+              // Pause defaults
+              if (setPauseSplitEnabled) setPauseSplitEnabled.checked = false;
+              if (setPauseThreshold) setPauseThreshold.value = String(TRANSCRIPT_DEFAULTS.pauseThreshold);
+
+              // Meili defaults
               if (setMeiliTypo) setMeiliTypo.checked = true;
               if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify({}, null, 2);
 
