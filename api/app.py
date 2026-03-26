@@ -1089,7 +1089,9 @@ DEFAULT_SETTINGS = {
         "ignore_abbreviations": [
             "Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Sr.", "Jr.", "St.", "vs.", "etc."
         ],
-        "max_segment_seconds": 12,
+        "max_segment_seconds": 30,
+        "pause_split_enabled": False,
+        "pause_threshold": 0.8,
     },
     "meta": {
         "last_reindex": "",
@@ -1243,6 +1245,23 @@ def validate_settings(raw: dict) -> dict:
     if max_sec > 60:
         max_sec = 60
     cleaned["transcript_postprocess"]["max_segment_seconds"] = max_sec
+
+    pause_split_enabled = tp.get("pause_split_enabled", DEFAULT_SETTINGS["transcript_postprocess"]["pause_split_enabled"])
+    cleaned["transcript_postprocess"]["pause_split_enabled"] = _coerce_bool(
+        pause_split_enabled,
+        DEFAULT_SETTINGS["transcript_postprocess"]["pause_split_enabled"],
+    )
+
+    pause_threshold = tp.get("pause_threshold", DEFAULT_SETTINGS["transcript_postprocess"]["pause_threshold"])
+    try:
+        pause_threshold = float(pause_threshold)
+    except Exception:
+        pause_threshold = DEFAULT_SETTINGS["transcript_postprocess"]["pause_threshold"]
+    if pause_threshold < 0.2:
+        pause_threshold = 0.2
+    if pause_threshold > 3.0:
+        pause_threshold = 3.0
+    cleaned["transcript_postprocess"]["pause_threshold"] = pause_threshold    
 
     # meta.last_reindex: string timestamp
     meta = raw.get("meta") or {}

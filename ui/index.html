@@ -235,6 +235,17 @@ Major UI Systems
             <input id="setTranscriptMaxSec" type="number" min="4" max="60"
               style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
 
+            <div class="small muted" style="margin:14px 0 6px;">Pause-aware splitting</div>
+            <label
+              style="display:flex; gap:8px; align-items:center; margin-bottom:10px; cursor:pointer; user-select:none;">
+              <input id="setPauseSplitEnabled" type="checkbox">
+              Enable splitting on pauses
+            </label>
+
+            <div class="small muted" style="margin:10px 0 6px;">Pause threshold (seconds)</div>
+            <input id="setPauseThreshold" type="number" min="0.2" max="3" step="0.1"
+              style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+
           </div>
 
           <div style="min-width:360px; flex:1; margin-top:24px;">
@@ -475,21 +486,30 @@ Major UI Systems
         const setTranscriptPunctuation = document.getElementById("setTranscriptPunctuation");
         const setTranscriptIgnore = document.getElementById("setTranscriptIgnore");
         const setTranscriptMaxSec = document.getElementById("setTranscriptMaxSec");
+        const setPauseSplitEnabled = document.getElementById("setPauseSplitEnabled");
+        const setPauseThreshold = document.getElementById("setPauseThreshold");
 
         const TRANSCRIPT_DEFAULTS = {
           punctuation: ".?!",
           ignore: [],
-          maxSec: 30
+          maxSec: 30,
+          pauseSplit: false,
+          pauseThreshold: 0.8
         };
 
         let transcriptPunctuationValue = TRANSCRIPT_DEFAULTS.punctuation;
         let transcriptIgnoreValue = TRANSCRIPT_DEFAULTS.ignore;
         let transcriptMaxSecValue = TRANSCRIPT_DEFAULTS.maxSec;
+        let pauseSplitEnabledValue = TRANSCRIPT_DEFAULTS.pauseSplit;
+        let pauseThresholdValue = TRANSCRIPT_DEFAULTS.pauseThreshold;
 
         function applyTranscriptPostprocess(tp) {
           transcriptPunctuationValue = (tp?.punctuation ?? "");
           transcriptIgnoreValue = Array.isArray(tp?.ignore_abbreviations) ? tp.ignore_abbreviations : [];
           transcriptMaxSecValue = Number(tp?.max_segment_seconds ?? TRANSCRIPT_DEFAULTS.maxSec) || TRANSCRIPT_DEFAULTS.maxSec;
+
+          pauseSplitEnabledValue = !!tp?.pause_split_enabled;
+          pauseThresholdValue = Number(tp?.pause_threshold ?? TRANSCRIPT_DEFAULTS.pauseThreshold) || TRANSCRIPT_DEFAULTS.pauseThreshold;
         }
 
         const setMeiliTypo = document.getElementById("setMeiliTypo");
@@ -578,6 +598,8 @@ Major UI Systems
           if (setTranscriptIgnore) setTranscriptIgnore.value = (Array.isArray(tp.ignore_abbreviations) ? tp.ignore_abbreviations.join(",") : "");
           if (setTranscriptMaxSec) setTranscriptMaxSec.value = String(tp.max_segment_seconds ?? TRANSCRIPT_DEFAULTS.maxSec);
           applyTranscriptPostprocess(tp);
+          if (setPauseSplitEnabled) setPauseSplitEnabled.checked = !!tp.pause_split_enabled;
+          if (setPauseThreshold) setPauseThreshold.value = String(tp.pause_threshold ?? TRANSCRIPT_DEFAULTS.pauseThreshold);
 
           if (setMeiliTypo) setMeiliTypo.checked = (m.typo_tolerance !== false);
           if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify(m.synonyms || {}, null, 2);
@@ -593,6 +615,10 @@ Major UI Systems
           const beamSizeRaw = (setWhisperBeam?.value || "").trim();
           const transcriptSegmentation = (setTranscriptSegmentation?.value || "whisper");
           const vad = !!setWhisperVad?.checked;
+
+          const pauseSplitEnabled = !!setPauseSplitEnabled?.checked;
+          let pauseThreshold = Number(setPauseThreshold?.value || TRANSCRIPT_DEFAULTS.pauseThreshold);
+          if (!Number.isFinite(pauseThreshold)) pauseThreshold = TRANSCRIPT_DEFAULTS.pauseThreshold;
 
           let nextBrowseLimit = Number((setBrowseLimit?.value || "").trim() || 20);
           if (!Number.isFinite(nextBrowseLimit)) nextBrowseLimit = 20;
@@ -621,16 +647,16 @@ Major UI Systems
             whisper: { language, beam_size, vad_filter: vad },
             meili: { typo_tolerance, synonyms },
             transcript_segmentation_mode: transcriptSegmentation,
+
             transcript_postprocess: {
-              punctuation: (setTranscriptPunctuation?.value ?? "").trim(),
-              ignore_abbreviations: (setTranscriptIgnore?.value || "")
-                .split(",")
-                .map(s => s.trim())
-                .filter(Boolean),
+              punctuation: (setTranscriptPunctuation?.value || ""),
+              ignore_abbreviations: (setTranscriptIgnore?.value || "").split(",").map(s => s.trim()).filter(Boolean),
               max_segment_seconds: Math.max(
                 4,
                 Math.min(60, Number(setTranscriptMaxSec?.value || TRANSCRIPT_DEFAULTS.maxSec) || TRANSCRIPT_DEFAULTS.maxSec)
-              )
+              ),
+              pause_split_enabled: pauseSplitEnabled,
+              pause_threshold: pauseThreshold
             }
           };
 
@@ -798,7 +824,7 @@ Major UI Systems
                   };
 
                   const offset = await findBrowseOffsetForFilename(b.filename);
-                  browseOffset = offset || 0;
+                  browseOffset = offset ?? 0;
                   await tabBrowse.onclick();
                 };
               }
@@ -841,7 +867,7 @@ Major UI Systems
                   };
 
                   const offset = await findBrowseOffsetForFilename(b.filename);
-                  browseOffset = offset || 0;
+                  browseOffset = offset ?? 0;
                   await tabBrowse.onclick();
                 };
               }
@@ -1822,6 +1848,7 @@ Major UI Systems
 
             if (idx !== -1) {
               const absoluteIndex = offset + idx;
+              console.log("findBrowseOffsetForFilename", filename, "absoluteIndex=", absoluteIndex, "browseLimit=", browseLimit, "offset=", Math.floor(absoluteIndex / browseLimit) * browseLimit);
               return Math.floor(absoluteIndex / browseLimit) * browseLimit;
             }
 
@@ -1886,34 +1913,35 @@ Major UI Systems
               el.classList.remove("active");
             });
 
-            const transcriptRows = Array.from(document.querySelectorAll(".transcriptSeg"));
-            const activeRow = transcriptRows.find((row) => {
-              const rowStart = Number(row.dataset.startSec || 0);
-              const rowEnd = Number(row.dataset.endSec || rowStart);
+            const activeSeg = (currentTimelineSegments || []).find((seg) => {
+              const rowStart = Number(seg?.startSec || 0);
+              const rowEnd = Number(seg?.endSec || rowStart);
               return currentTime >= rowStart && currentTime < rowEnd;
             });
 
-            if (!activeRow) {
+            if (!activeSeg) {
               captionBox.textContent = "";
               return;
             }
 
-            activeRow.classList.add("active");
+            captionBox.textContent = String(activeSeg.text || "").trim();
 
-            const textEl = activeRow.querySelector(".transcriptText");
-            captionBox.textContent = textEl ? String(textEl.textContent || "").trim() : "";
+            const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${Math.floor(Number(activeSeg.startSec || 0))}"]`);
+            if (activeRow) {
+              activeRow.classList.add("active");
 
-            const box = activeRow.closest(".transcriptBox");
-            if (box) {
-              const boxRect = box.getBoundingClientRect();
-              const rowRect = activeRow.getBoundingClientRect();
-              const rowTopInBox = rowRect.top - boxRect.top + box.scrollTop;
-              const targetTop = rowTopInBox - (box.clientHeight / 2) + (rowRect.height / 2);
+              const box = activeRow.closest(".transcriptBox");
+              if (box) {
+                const boxRect = box.getBoundingClientRect();
+                const rowRect = activeRow.getBoundingClientRect();
+                const rowTopInBox = rowRect.top - boxRect.top + box.scrollTop;
+                const targetTop = rowTopInBox - (box.clientHeight / 2) + (rowRect.height / 2);
 
-              box.scrollTop = Math.max(0, targetTop);
+                box.scrollTop = Math.max(0, targetTop);
+              }
             }
 
-            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${Math.floor(Number(activeRow.dataset.startSec || 0))}"]`);
+            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${Math.floor(Number(activeSeg.startSec || 0))}"]`);
             if (activeMarker) {
               activeMarker.classList.add("active");
             }
