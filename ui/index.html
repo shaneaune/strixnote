@@ -1043,7 +1043,6 @@ Major UI Systems
           const punctuationChars = transcriptPunctuationValue;
           const ignoreAbbreviations = transcriptIgnoreValue;
           let hardMaxSec = Number(transcriptMaxSecValue);
-          console.log("normalizeTranscriptSegments hardMaxSec =", hardMaxSec);
           if (!Number.isFinite(hardMaxSec)) hardMaxSec = TRANSCRIPT_DEFAULTS.maxSec;
 
           const splitCompletedSentences = (text) => {
@@ -1682,7 +1681,6 @@ Major UI Systems
             const vtt = await fetchTranscriptVtt(base);
             const rawSegments = parseVttSegmentsForTranscript(vtt);
             const segmentationMode = transcriptSegmentationModeValue || "whisper";
-            console.log("Transcript segmentation mode:", segmentationMode);
             const segments = segmentationMode === "postprocessed"
               ? normalizeTranscriptSegments(rawSegments)
               : rawSegments;
@@ -1848,7 +1846,6 @@ Major UI Systems
 
             if (idx !== -1) {
               const absoluteIndex = offset + idx;
-              console.log("findBrowseOffsetForFilename", filename, "absoluteIndex=", absoluteIndex, "browseLimit=", browseLimit, "offset=", Math.floor(absoluteIndex / browseLimit) * browseLimit);
               return Math.floor(absoluteIndex / browseLimit) * browseLimit;
             }
 
