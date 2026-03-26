@@ -243,9 +243,11 @@ Major UI Systems
             </label>
 
             <div class="small muted" style="margin:10px 0 6px;">Pause threshold (seconds)</div>
-            <input id="setPauseThreshold" type="number" min="0.2" max="3" step="0.1"
+            <input id="setPauseThreshold" type="number" min="0.2" max="3" step="0.1" value="0.8"
               style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
-
+            <div class="small muted" style="margin-top:6px;">
+              Recommended: 0.6-1.2 seconds. Lower = more splits, higher = fewer splits.
+            </div>
           </div>
 
           <div style="min-width:360px; flex:1; margin-top:24px;">
@@ -1151,6 +1153,28 @@ Major UI Systems
             if (!current) {
               current = { startSec, endSec, text };
             } else {
+              // Pause-aware split must happen BEFORE merging the new segment
+              if (pauseSplitEnabledValue && current.endSec != null) {
+                const gap = startSec - current.endSec;
+                if (gap >= pauseThresholdValue) {
+                  const splitPause = splitCompletedSentences(current.text);
+
+                  if (splitPause.complete.length) {
+                    emitSentences(current.startSec, current.endSec, splitPause.complete);
+                  } else {
+                    out.push({
+                      startSec: current.startSec,
+                      endSec: current.endSec,
+                      startLabel: secondsToHMS(current.startSec),
+                      text: current.text,
+                    });
+                  }
+
+                  current = { startSec, endSec, text };
+                  continue;
+                }
+              }
+
               current.endSec = endSec;
               current.text = `${current.text} ${text}`.replace(/\s+/g, " ").trim();
             }
