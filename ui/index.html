@@ -297,7 +297,7 @@ Major UI Systems
               Re-index only if search results appear incorrect or missing.
             </div>
 
-            <div id="settingsStatus" class="small muted"></div>
+            <div class="small muted"></div>
             <div id="reindexStatus" class="small muted"></div>
             <div id="reindexProgressWrap" style="display:none; margin-top:8px; width:100%;">
               <div class="progress">
@@ -1086,26 +1086,77 @@ Major UI Systems
             return { complete, remaining };
           };
 
-          const emitSentences = (startSec, endSec, sentences) => {
+          const emitSentences = (startSec, endSec, sentences, parts = null, hasRemaining = false) => {
             if (!sentences.length) return startSec;
 
+            const partList = Array.isArray(parts) && parts.length
+              ? parts
+              : [{ startSec, endSec, text: sentences.join(" ") }];
+
             const totalDur = Math.max(0, endSec - startSec);
-            const totalChars = Math.max(
-              1,
-              sentences.reduce((n, s) => n + String(s || "").length, 0)
-            );
+            const fullText = partList.map(p => String(p?.text || "").trim()).join(" ").replace(/\s+/g, " ").trim();
+            const totalChars = Math.max(1, fullText.length);
+
+            const sentenceRanges = [];
+            let searchFrom = 0;
+
+            const partCharRanges = [];
+            let partCharCursor = 0;
+            partList.forEach((part) => {
+              const partText = String(part?.text || "").trim();
+              const partStartChar = partCharCursor;
+              const partEndChar = partStartChar + partText.length;
+              partCharRanges.push({
+                startChar: partStartChar,
+                endChar: partEndChar,
+                startSec: Number(part?.startSec || startSec),
+                endSec: Number(part?.endSec || endSec),
+              });
+              partCharCursor = partEndChar + 1;
+            });
+
+            sentences.forEach((sentence, idx) => {
+              const trimmedSentence = String(sentence || "").trim();
+              const pos = fullText.indexOf(trimmedSentence, searchFrom);
+              const sentenceStartChar = pos >= 0 ? pos : searchFrom;
+              const sentenceEndChar = sentenceStartChar + trimmedSentence.length;
+              searchFrom = sentenceEndChar;
+
+              const isLastSentence = idx === sentences.length - 1 && !hasRemaining;
+              const sentenceStart = sentenceRanges.length
+                ? sentenceRanges[sentenceRanges.length - 1].endSec
+                : startSec;
+
+              let sentenceEnd = endSec;
+
+              if (!isLastSentence) {
+                const matchPart = partCharRanges.find((part) =>
+                  sentenceEndChar <= part.endChar + 1
+                );
+                if (matchPart) {
+                  const partSpanChars = Math.max(1, (matchPart.endChar + 1) - matchPart.startChar);
+                  const charsIntoPart = Math.max(0, sentenceEndChar - matchPart.startChar);
+                  const ratioInPart = Math.max(0, Math.min(1, charsIntoPart / partSpanChars));
+                  const interpolatedEnd =
+                    matchPart.startSec + ((matchPart.endSec - matchPart.startSec) * ratioInPart);
+
+                  sentenceEnd = Math.min(endSec, Math.max(sentenceStart, interpolatedEnd));
+                }
+              }
+
+              sentenceRanges.push({
+                text: trimmedSentence,
+                startSec: sentenceStart,
+                endSec: sentenceEnd,
+              });
+            });
 
             let cursor = startSec;
 
-            sentences.forEach((sentence, idx) => {
-              const isLastSentence = idx === sentences.length - 1;
-              const sentenceDur = isLastSentence
-                ? Math.max(0, endSec - cursor)
-                : totalDur * (String(sentence || "").length / totalChars);
-
-              const sentenceStart = cursor;
-              const sentenceEnd = isLastSentence ? endSec : Math.min(endSec, cursor + sentenceDur);
-              const trimmedSentence = String(sentence || "").trim();
+            sentenceRanges.forEach((range, idx) => {
+              const sentenceStart = idx === 0 ? startSec : cursor;
+              const sentenceEnd = Math.max(sentenceStart, range.endSec);
+              const trimmedSentence = range.text;
               const words = trimmedSentence.split(/\s+/).filter(Boolean);
 
               const chunkCount = Math.max(1, Math.min(words.length || 1, Math.ceil((sentenceEnd - sentenceStart) / hardMaxSec)));
@@ -1117,17 +1168,30 @@ Major UI Systems
                   text: trimmedSentence,
                 });
               } else {
-                let wordIndex = 0;
+                let effectiveChunkCount = chunkCount;
+                const totalSentenceDur = sentenceEnd - sentenceStart;
 
-                for (let chunkIdx = 0; chunkIdx < chunkCount; chunkIdx++) {
-                  const remainingChunks = chunkCount - chunkIdx;
+                if (effectiveChunkCount > 1) {
+                  const tailDur = totalSentenceDur - (hardMaxSec * (effectiveChunkCount - 1));
+                  if (tailDur > 0 && tailDur < (hardMaxSec * 0.4)) {
+                    effectiveChunkCount -= 1;
+                  }
+                }
+
+                let wordIndex = 0;
+                let chunkCursor = sentenceStart;
+
+                for (let chunkIdx = 0; chunkIdx < effectiveChunkCount; chunkIdx++) {
+                  const remainingChunks = effectiveChunkCount - chunkIdx;
                   const remainingWords = words.length - wordIndex;
                   const takeCount = Math.max(1, Math.ceil(remainingWords / remainingChunks));
                   const chunkWords = words.slice(wordIndex, wordIndex + takeCount);
                   wordIndex += takeCount;
 
-                  const chunkStart = sentenceStart + (chunkIdx * hardMaxSec);
-                  const chunkEnd = Math.min(sentenceEnd, chunkStart + hardMaxSec);
+                  const chunkStart = chunkCursor;
+                  const chunkEnd = chunkIdx === effectiveChunkCount - 1
+                    ? sentenceEnd
+                    : Math.min(sentenceEnd, chunkStart + hardMaxSec);
 
                   out.push({
                     startSec: chunkStart,
@@ -1135,6 +1199,8 @@ Major UI Systems
                     startLabel: secondsToHMS(chunkStart),
                     text: chunkWords.join(" "),
                   });
+
+                  chunkCursor = chunkEnd;
                 }
               }
 
@@ -1151,7 +1217,12 @@ Major UI Systems
             if (!text) continue;
 
             if (!current) {
-              current = { startSec, endSec, text };
+              current = {
+                startSec,
+                endSec,
+                text,
+                parts: [{ startSec, endSec, text }],
+              };
             } else {
               // Pause-aware split must happen BEFORE merging the new segment
               if (pauseSplitEnabledValue && current.endSec != null) {
@@ -1170,25 +1241,32 @@ Major UI Systems
                     });
                   }
 
-                  current = { startSec, endSec, text };
+                  current = {
+                    startSec,
+                    endSec,
+                    text,
+                    parts: [{ startSec, endSec, text }],
+                  };
                   continue;
                 }
               }
 
               current.endSec = endSec;
               current.text = `${current.text} ${text}`.replace(/\s+/g, " ").trim();
+              current.parts = [...(current.parts || []), { startSec, endSec, text }];
             }
 
             const split = splitCompletedSentences(current.text);
 
             if (split.complete.length) {
-              const lastEnd = emitSentences(current.startSec, current.endSec, split.complete);
+              const lastEnd = emitSentences(current.startSec, current.endSec, split.complete, current.parts, !!split.remaining);
 
               if (split.remaining) {
                 current = {
                   startSec: lastEnd,
                   endSec: current.endSec,
                   text: split.remaining,
+                  parts: current.parts || [],
                 };
               } else {
                 current = null;
@@ -1264,7 +1342,7 @@ Major UI Systems
 
             const marker = document.createElement("div");
             marker.className = "timelineMarker";
-            marker.dataset.startSec = Math.floor(seg.startSec);
+            marker.dataset.startSec = String(seg.startSec);
 
             const pct = (seg.startSec / dur) * 100;
             marker.style.left = pct + "%";
@@ -1358,7 +1436,7 @@ Major UI Systems
             row.className = "transcriptSeg";
             row.style.display = "flex";
             row.style.alignItems = "flex-start";
-            row.dataset.startSec = String(Math.floor(seg.startSec));
+            row.dataset.startSec = String(seg.startSec);
             row.dataset.endSec = String(Number(seg.endSec || seg.startSec));
 
             row.addEventListener("mouseenter", () => {
@@ -1962,7 +2040,7 @@ Major UI Systems
             const activeSeg = (currentTimelineSegments || []).find((seg) => {
               const rowStart = Number(seg?.startSec || 0);
               const rowEnd = Number(seg?.endSec || rowStart);
-              return currentTime >= rowStart && currentTime < rowEnd;
+              return currentTime >= (rowStart - 0.15) && currentTime < rowEnd;
             });
 
             if (!activeSeg) {
@@ -1972,7 +2050,7 @@ Major UI Systems
 
             captionBox.textContent = String(activeSeg.text || "").trim();
 
-            const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${Math.floor(Number(activeSeg.startSec || 0))}"]`);
+            const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${String(activeSeg.startSec)}"]`);
             if (activeRow) {
               activeRow.classList.add("active");
 
@@ -1987,7 +2065,7 @@ Major UI Systems
               }
             }
 
-            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${Math.floor(Number(activeSeg.startSec || 0))}"]`);
+            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${String(activeSeg.startSec)}"]`);
             if (activeMarker) {
               activeMarker.classList.add("active");
             }
@@ -2034,8 +2112,28 @@ Major UI Systems
           if (previousFile !== filename && !openTranscriptForFile) {
             if (segmentTimelineWrap) segmentTimelineWrap.style.display = "none";
             if (segmentTimeline) segmentTimeline.innerHTML = "";
-            currentTimelineSegments = [];
-            currentTimelineFilename = "";
+            // Do not clear segments here; preload logic will manage state
+          }
+
+          if (!currentTimelineSegments.length || currentTimelineFilename !== filename) {
+            (async () => {
+              try {
+                const vtt = await fetchTranscriptVtt(baseName(filename));
+                const rawSegments = parseVttSegmentsForTranscript(vtt);
+                const segments = transcriptSegmentationModeValue === "postprocessed"
+                  ? normalizeTranscriptSegments(rawSegments)
+                  : rawSegments;
+
+                currentTimelineSegments = segments;
+                currentTimelineFilename = filename;
+
+                if (player.readyState >= 1 && currentFile === filename && currentTimelineSegments.length) {
+                  renderSegmentTimeline(currentTimelineSegments, filename);
+                }
+              } catch (e) {
+                // leave captions/timeline empty if transcript preload fails
+              }
+            })();
           }
 
           // close any open transcript panels for other files
