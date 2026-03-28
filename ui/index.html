@@ -414,6 +414,25 @@ Major UI Systems
           tabSettings?.classList.toggle("active", tabName === "settings");
         }
 
+        function readTranscriptPostprocessFromForm() {
+          return {
+            punctuation: (setTranscriptPunctuation?.value || ""),
+            ignore_abbreviations: (setTranscriptIgnore?.value || "")
+              .split(",")
+              .map(s => s.trim())
+              .filter(Boolean),
+            max_segment_seconds: Math.max(
+              4,
+              Math.min(
+                60,
+                Number(setTranscriptMaxSec?.value || TRANSCRIPT_DEFAULTS.maxSec) || TRANSCRIPT_DEFAULTS.maxSec
+              )
+            ),
+            pause_split_enabled: !!setPauseSplitEnabled?.checked,
+            pause_threshold: Number(setPauseThreshold?.value || TRANSCRIPT_DEFAULTS.pauseThreshold) || TRANSCRIPT_DEFAULTS.pauseThreshold
+          };
+        }
+
         function setMode(nextMode) {
           mode = nextMode;
           try { player.pause(); } catch (e) { }
@@ -512,6 +531,25 @@ Major UI Systems
 
           pauseSplitEnabledValue = !!tp?.pause_split_enabled;
           pauseThresholdValue = Number(tp?.pause_threshold ?? TRANSCRIPT_DEFAULTS.pauseThreshold) || TRANSCRIPT_DEFAULTS.pauseThreshold;
+        }
+
+        function buildTranscriptPostprocessFromUI() {
+          return {
+            punctuation: (setTranscriptPunctuation?.value || ""),
+            ignore_abbreviations: (setTranscriptIgnore?.value || "")
+              .split(",")
+              .map(s => s.trim())
+              .filter(Boolean),
+            max_segment_seconds: Math.max(
+              4,
+              Math.min(
+                60,
+                Number(setTranscriptMaxSec?.value || TRANSCRIPT_DEFAULTS.maxSec) || TRANSCRIPT_DEFAULTS.maxSec
+              )
+            ),
+            pause_split_enabled: !!setPauseSplitEnabled?.checked,
+            pause_threshold: Number(setPauseThreshold?.value ?? TRANSCRIPT_DEFAULTS.pauseThreshold) || TRANSCRIPT_DEFAULTS.pauseThreshold
+          };
         }
 
         const setMeiliTypo = document.getElementById("setMeiliTypo");
@@ -618,10 +656,6 @@ Major UI Systems
           const transcriptSegmentation = (setTranscriptSegmentation?.value || "whisper");
           const vad = !!setWhisperVad?.checked;
 
-          const pauseSplitEnabled = !!setPauseSplitEnabled?.checked;
-          let pauseThreshold = Number(setPauseThreshold?.value || TRANSCRIPT_DEFAULTS.pauseThreshold);
-          if (!Number.isFinite(pauseThreshold)) pauseThreshold = TRANSCRIPT_DEFAULTS.pauseThreshold;
-
           let nextBrowseLimit = Number((setBrowseLimit?.value || "").trim() || 20);
           if (!Number.isFinite(nextBrowseLimit)) nextBrowseLimit = 20;
           nextBrowseLimit = Math.max(5, Math.min(100, Math.round(nextBrowseLimit)));
@@ -645,30 +679,16 @@ Major UI Systems
             throw new Error("Synonyms JSON is invalid");
           }
 
+          const transcriptPostprocess = buildTranscriptPostprocessFromUI();
           const payload = {
             whisper: { language, beam_size, vad_filter: vad },
             meili: { typo_tolerance, synonyms },
             transcript_segmentation_mode: transcriptSegmentation,
 
-            transcript_postprocess: {
-              punctuation: (setTranscriptPunctuation?.value || ""),
-              ignore_abbreviations: (setTranscriptIgnore?.value || "").split(",").map(s => s.trim()).filter(Boolean),
-              max_segment_seconds: Math.max(
-                4,
-                Math.min(60, Number(setTranscriptMaxSec?.value || TRANSCRIPT_DEFAULTS.maxSec) || TRANSCRIPT_DEFAULTS.maxSec)
-              ),
-              pause_split_enabled: pauseSplitEnabled,
-              pause_threshold: pauseThreshold
-            }
+            transcript_postprocess: transcriptPostprocess
           };
 
           transcriptSegmentationModeValue = transcriptSegmentation;
-
-          document.querySelectorAll(".transcriptBox").forEach(box => {
-            delete box.dataset.loaded;
-          });
-          currentTimelineSegments = [];
-          currentTimelineFilename = "";
 
           const r = await fetch("/api/settings", {
             method: "PUT",
@@ -678,26 +698,13 @@ Major UI Systems
           const data = await r.json();
           if (!r.ok || !data.ok) throw new Error(data.error || r.statusText);
 
-          applyTranscriptPostprocess(payload.transcript_postprocess);
+          applyTranscriptPostprocess(transcriptPostprocess);
 
           browseLimit = nextBrowseLimit;
           try { localStorage.setItem("strixnote_browse_limit", String(browseLimit)); } catch (e) { }
           if (setBrowseLimit) setBrowseLimit.value = String(browseLimit);
 
-          document.querySelectorAll(".transcriptBox").forEach((box) => {
-            delete box.dataset.loaded;
-            box.textContent = "";
-          });
-
-          document.querySelectorAll(".transcriptWrap.open").forEach((wrap) => {
-            wrap.classList.remove("open");
-            wrap.style.maxHeight = "0px";
-            wrap.style.opacity = "0";
-          });
-
-          document.querySelectorAll(".btn-text").forEach((btn) => {
-            btn.textContent = "Transcript";
-          });
+          resetTranscriptUIState();
 
           if (settingsSaveBtn) settingsSaveBtn.disabled = false;
           if (settingsStatus) settingsStatus.textContent = "Saved.";
@@ -717,6 +724,38 @@ Major UI Systems
         let pendingBrowseFileOpen = null;
         let browseLimit = Number(localStorage.getItem("strixnote_browse_limit") || 20);
         let transcriptSegmentationModeValue = "postprocessed";
+
+        function setCurrentTimelineState(segments, filename) {
+          currentTimelineSegments = Array.isArray(segments) ? segments : [];
+          currentTimelineFilename = filename || "";
+        }
+
+        function resetTranscriptUIState() {
+          document.querySelectorAll(".transcriptBox").forEach(box => {
+            delete box.dataset.loaded;
+          });
+
+          clearCurrentTimelineState();
+
+          document.querySelectorAll(".transcriptWrap.open").forEach((wrap) => {
+            wrap.classList.remove("open");
+            wrap.style.maxHeight = "0px";
+            wrap.style.opacity = "0";
+          });
+
+          document.querySelectorAll(".btn-text").forEach((btn) => {
+            btn.textContent = "Transcript";
+          });
+        }
+
+        function getBaseNameSafe(filename) {
+          return baseName(filename || "");
+        }
+
+        function clearCurrentTimelineState() {
+          currentTimelineSegments = [];
+          currentTimelineFilename = "";
+        }
 
         const BOOKMARKS_KEY = "strixnote_bookmarks";
 
@@ -1636,6 +1675,64 @@ Major UI Systems
           }, 100);
         }
 
+        async function handleTranscriptDownload({ div, filename, tsToggle }) {
+          const base = getBaseNameSafe(filename);
+          const wantTs = !(tsToggle && tsToggle.checked);
+          let processedSegments = null;
+          if (wantTs && transcriptSegmentationModeValue === "postprocessed") {
+            if (currentTimelineFilename === filename && currentTimelineSegments.length) {
+              processedSegments = currentTimelineSegments;
+            } else {
+              processedSegments = await getRenderedTranscriptSegments(base);
+            }
+          }
+
+          try {
+            await downloadTranscriptFile(base, wantTs, processedSegments);
+          } catch (err) {
+            const statusEl = div.querySelector(".clipStatus");
+            if (statusEl) {
+              statusEl.textContent = "Transcript download failed: " + (err?.message || err);
+            }
+          }
+        }
+
+        async function getRenderedTranscriptSegments(base) {
+          const vtt = await fetchTranscriptVtt(base);
+          const rawSegments = parseVttSegmentsForTranscript(vtt);
+          const segmentationMode = transcriptSegmentationModeValue || "whisper";
+          return segmentationMode === "postprocessed"
+            ? normalizeTranscriptSegments(rawSegments)
+            : rawSegments;
+        }
+
+        async function getPlainTranscriptText(base) {
+          return await fetchTranscriptText(base, false, "(empty)");
+        }
+
+        function applyRenderedTranscriptToUI({
+          segments,
+          filename,
+          transcriptBox,
+          selectedClipSegments,
+          refreshClipActions
+        }) {
+          if (!segments || !segments.length) {
+            transcriptBox.textContent = "(empty)";
+            return;
+          }
+
+          setCurrentTimelineState(segments, filename);
+          renderSegmentTimeline(segments, filename);
+          renderTranscriptSegments(
+            transcriptBox,
+            segments,
+            filename,
+            selectedClipSegments,
+            refreshClipActions
+          );
+        }
+
         function wireTranscriptControls({
           div,
           filename,
@@ -1791,52 +1888,30 @@ Major UI Systems
           };
 
           const renderTranscript = async () => {
-            const base = baseName(filename || "");
+            const base = getBaseNameSafe(filename);
             const wantTs = !(tsToggle && tsToggle.checked);
 
             if (!wantTs) {
-              transcriptBox.textContent =
-                await fetchTranscriptText(base, false, "(empty)");
+              transcriptBox.textContent = await getPlainTranscriptText(base);
               return;
             }
 
-            const vtt = await fetchTranscriptVtt(base);
-            const rawSegments = parseVttSegmentsForTranscript(vtt);
-            const segmentationMode = transcriptSegmentationModeValue || "whisper";
-            const segments = segmentationMode === "postprocessed"
-              ? normalizeTranscriptSegments(rawSegments)
-              : rawSegments;
+            const segments = await getRenderedTranscriptSegments(base);
 
-            if (!segments.length) {
-              transcriptBox.textContent = "(empty)";
-              return;
-            }
-            currentTimelineSegments = segments;
-            currentTimelineFilename = filename;
-            renderSegmentTimeline(segments, filename);
-            renderTranscriptSegments(transcriptBox, segments, filename, selectedClipSegments, refreshClipActions);
+            applyRenderedTranscriptToUI({
+              segments,
+              filename,
+              transcriptBox,
+              selectedClipSegments,
+              refreshClipActions
+            });
           };
 
           if (dlBtn && !dlBtn.dataset.wired) {
             dlBtn.dataset.wired = "1";
             dlBtn.addEventListener("click", async (e) => {
               e.stopPropagation();
-
-              try {
-                const base = baseName(filename || "");
-                const wantTs = !(tsToggle && tsToggle.checked);
-                const processedSegments = (wantTs &&
-                  transcriptSegmentationModeValue === "postprocessed" &&
-                  currentTimelineFilename === filename)
-                  ? currentTimelineSegments
-                  : null;
-                await downloadTranscriptFile(base, wantTs, processedSegments);
-              } catch (err) {
-                const statusEl = div.querySelector(".clipStatus");
-                if (statusEl) {
-                  statusEl.textContent = "Transcript download failed: " + (err?.message || err);
-                }
-              }
+              await handleTranscriptDownload({ div, filename, tsToggle });
             });
           }
 
@@ -2112,7 +2187,7 @@ Major UI Systems
           if (previousFile !== filename && !openTranscriptForFile) {
             if (segmentTimelineWrap) segmentTimelineWrap.style.display = "none";
             if (segmentTimeline) segmentTimeline.innerHTML = "";
-            // Do not clear segments here; preload logic will manage state
+            clearCurrentTimelineState();
           }
 
           if (!currentTimelineSegments.length || currentTimelineFilename !== filename) {
@@ -2124,8 +2199,7 @@ Major UI Systems
                   ? normalizeTranscriptSegments(rawSegments)
                   : rawSegments;
 
-                currentTimelineSegments = segments;
-                currentTimelineFilename = filename;
+                setCurrentTimelineState(segments, filename);
 
                 if (player.readyState >= 1 && currentFile === filename && currentTimelineSegments.length) {
                   renderSegmentTimeline(currentTimelineSegments, filename);
