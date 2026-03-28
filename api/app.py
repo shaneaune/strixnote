@@ -1334,7 +1334,6 @@ def apply_meili_settings(meili_cfg: dict) -> dict:
         "results": results,
     }
 
-
 @app.get("/settings")
 def get_settings():
     current = load_settings()
