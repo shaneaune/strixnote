@@ -1416,12 +1416,7 @@ Major UI Systems
             marker.addEventListener("click", (e) => {
               e.stopPropagation();
 
-              if (currentFile === filename && player.src) {
-                player.currentTime = seg.startSec;
-                player.play().catch(() => { });
-              } else {
-                loadFile(filename, seg.startSec * 1000);
-              }
+              playFromSegment(filename, seg.startSec);
             });
 
             segmentTimeline.appendChild(marker);
@@ -1472,12 +1467,7 @@ Major UI Systems
 
               placePlayerAboveRow(hostRow);
 
-              if (currentFile === filename && player.src) {
-                player.currentTime = sec;
-                player.play().catch(() => { });
-              } else {
-                loadFile(filename, sec * 1000);
-              }
+              playFromSegment(filename, sec);
             }
           };
 
@@ -1494,6 +1484,26 @@ Major UI Systems
             });
           }
 
+          const playFromSegment = (filename, startSec) => {
+            if (currentFile === filename && player.src) {
+              player.currentTime = startSec;
+              player.play().catch(() => { });
+            } else {
+              loadFile(filename, startSec * 1000);
+            }
+          };
+
+          const setTimelineHover = (startSec) => {
+            document.querySelectorAll(".timelineMarker.hover").forEach(m => {
+              m.classList.remove("hover");
+            });
+
+            const marker = document.querySelector(
+              `.timelineMarker[data-start-sec="${Math.floor(startSec)}"]`
+            );
+            if (marker) marker.classList.add("hover");
+          };
+
           segments.forEach(seg => {
             const row = document.createElement("div");
             rows.push(row);
@@ -1504,18 +1514,11 @@ Major UI Systems
             row.dataset.endSec = String(Number(seg.endSec || seg.startSec));
 
             row.addEventListener("mouseenter", () => {
-              document.querySelectorAll(".timelineMarker.hover").forEach(m => {
-                m.classList.remove("hover");
-              });
-
-              const marker = document.querySelector(`.timelineMarker[data-start-sec="${Math.floor(seg.startSec)}"]`);
-              if (marker) marker.classList.add("hover");
+              setTimelineHover(seg.startSec);
             });
 
             row.addEventListener("mouseleave", () => {
-              document.querySelectorAll(".timelineMarker.hover").forEach(m => {
-                m.classList.remove("hover");
-              });
+              setTimelineHover(null);
             });
 
             row.style.cursor = "pointer";
@@ -1528,12 +1531,7 @@ Major UI Systems
 
               placePlayerAboveRow(hostRow);
 
-              if (currentFile === filename && player.src) {
-                player.currentTime = seg.startSec;
-                player.play().catch(() => { });
-              } else {
-                loadFile(filename, seg.startSec * 1000);
-              }
+              playFromSegment(filename, seg.startSec);
             });
 
             const ts = document.createElement("span");
