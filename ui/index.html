@@ -1564,8 +1564,8 @@ Major UI Systems
             clip.addEventListener("click", (e) => {
               e.stopPropagation();
 
-              const startSec = Math.floor(seg.startSec);
-              const key = `${filename}:${startSec}`;
+              const startSec = Number(seg.startSec);
+              const key = `${filename}:${startSec}:${Number(seg.endSec || seg.startSec)}`;
 
               if (selectedClipSegments.has(key)) {
                 selectedClipSegments.delete(key);
@@ -1752,6 +1752,41 @@ Major UI Systems
 
           const selectedClipSegments = new Map();
 
+          const getSelectedClipRanges = () => {
+            return Array.from(selectedClipSegments.values())
+              .sort((a, b) => a.startSec - b.startSec);
+          };
+
+          const setClipStatus = (message) => {
+            const statusEl = div.querySelector(".clipStatus");
+            if (statusEl) {
+              statusEl.textContent = message;
+            }
+          };
+
+          const handleClipError = async (resp, messagePrefix) => {
+            if (!resp.ok) {
+              const err = await resp.json().catch(() => ({}));
+              setClipStatus(messagePrefix + (err.error || resp.statusText));
+              return true;
+            }
+            return false;
+          };
+
+          const postClipRequest = async (mode) => {
+            const ranges = getSelectedClipRanges();
+
+            return await fetch("/api/clip", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                filename,
+                mode,
+                ranges
+              })
+            });
+          };
+
           const refreshClipActions = () => {
             const count = selectedClipSegments.size;
 
@@ -1802,27 +1837,9 @@ Major UI Systems
             clipDownloadBtn.addEventListener("click", async (e) => {
               e.stopPropagation();
 
-              const ranges = Array.from(selectedClipSegments.values())
-                .sort((a, b) => a.startSec - b.startSec);
+              const resp = await postClipRequest("download");
 
-              const resp = await fetch("/api/clip", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  filename,
-                  mode: "download",
-                  ranges
-                })
-              });
-
-              if (!resp.ok) {
-                const err = await resp.json().catch(() => ({}));
-                const statusEl = div.querySelector(".clipStatus");
-                if (statusEl) {
-                  statusEl.textContent = "Clip download failed: " + (err.error || resp.statusText);
-                }
-                return;
-              }
+              if (await handleClipError(resp, "Clip download failed: ")) return;
 
               const blob = await resp.blob();
               const url = URL.createObjectURL(blob);
@@ -1845,33 +1862,13 @@ Major UI Systems
             clipReimportBtn.addEventListener("click", async (e) => {
               e.stopPropagation();
 
-              const ranges = Array.from(selectedClipSegments.values())
-                .sort((a, b) => a.startSec - b.startSec);
+              const resp = await postClipRequest("reimport");
 
-              const resp = await fetch("/api/clip", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  filename,
-                  mode: "reimport",
-                  ranges
-                })
-              });
+              if (await handleClipError(resp, "Send to StrixNote failed: ")) return;
 
               const data = await resp.json().catch(() => ({}));
 
-              if (!resp.ok || !data.ok) {
-                const statusEl = div.querySelector(".clipStatus");
-                if (statusEl) {
-                  statusEl.textContent = "Send to StrixNote failed: " + (data.error || resp.statusText);
-                }
-                return;
-              }
-
-              const statusEl = div.querySelector(".clipStatus");
-              if (statusEl) {
-                statusEl.textContent = `Clip sent to StrixNote as ${data.filename}. Browse will refresh automatically when processing is complete.`;
-              }
+              setClipStatus(`Clip sent to StrixNote as ${data.filename}. Browse will refresh automatically when processing is complete.`);
               pollClipReimport(data.filename);
             });
           }
