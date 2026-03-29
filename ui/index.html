@@ -748,6 +748,31 @@ Major UI Systems
           });
         }
 
+        function toggleClipSelection({
+          key,
+          startSec,
+          endSec,
+          clipEl,
+          rowEl,
+          selectedClipSegments,
+          refreshClipActions
+        }) {
+          if (selectedClipSegments.has(key)) {
+            selectedClipSegments.delete(key);
+            clipEl.classList.remove("active");
+            rowEl.classList.remove("clip-selected");
+          } else {
+            selectedClipSegments.set(key, {
+              startSec,
+              endSec
+            });
+            clipEl.classList.add("active");
+            rowEl.classList.add("clip-selected");
+          }
+
+          refreshClipActions();
+        }
+
         function getBaseNameSafe(filename) {
           return baseName(filename || "");
         }
@@ -1556,6 +1581,20 @@ Major UI Systems
             row.appendChild(text);
             row.appendChild(copy);
 
+            const getClipSegmentKey = (seg) => {
+              const startSec = Number(seg.startSec);
+              const endSec = Number(seg.endSec || seg.startSec);
+              return {
+                startSec,
+                endSec,
+                key: `${filename}:${startSec}:${endSec}`
+              };
+            };
+
+            const getBookmarkSymbol = (filename, startSec) =>
+              isBookmarkedSegment(filename, startSec) ? "★" : "☆";
+
+            const getBookmarkStartSec = (seg) => Math.floor(seg.startSec || 0);
             const clip = document.createElement("span");
             clip.className = "transcriptClip";
             clip.title = "Add to clip";
@@ -1564,23 +1603,17 @@ Major UI Systems
             clip.addEventListener("click", (e) => {
               e.stopPropagation();
 
-              const startSec = Number(seg.startSec);
-              const key = `${filename}:${startSec}:${Number(seg.endSec || seg.startSec)}`;
+              const { startSec, endSec, key } = getClipSegmentKey(seg);
 
-              if (selectedClipSegments.has(key)) {
-                selectedClipSegments.delete(key);
-                clip.classList.remove("active");
-                row.classList.remove("clip-selected");
-              } else {
-                selectedClipSegments.set(key, {
-                  startSec,
-                  endSec: seg.endSec
-                });
-                clip.classList.add("active");
-                row.classList.add("clip-selected");
-              }
-
-              refreshClipActions();
+              toggleClipSelection({
+                key,
+                startSec,
+                endSec,
+                clipEl: clip,
+                rowEl: row,
+                selectedClipSegments,
+                refreshClipActions
+              });
             });
 
             row.appendChild(clip);
@@ -1589,14 +1622,14 @@ Major UI Systems
             bookmark.className = "transcriptBookmark";
             bookmark.title = "Bookmark segment";
 
-            const startSec = Math.floor(seg.startSec || 0);
-            bookmark.textContent = isBookmarkedSegment(filename, startSec) ? "★" : "☆";
+            const startSec = getBookmarkStartSec(seg);
+            bookmark.textContent = getBookmarkSymbol(filename, startSec);
             bookmark.style.marginLeft = "0";
 
             bookmark.addEventListener("click", (e) => {
               e.stopPropagation();
 
-              const startSec = Math.floor(seg.startSec || 0);
+              const startSec = getBookmarkStartSec(seg);
 
               if (isBookmarkedSegment(filename, startSec)) {
                 removeBookmark({
@@ -1613,7 +1646,7 @@ Major UI Systems
                 });
               }
 
-              bookmark.textContent = isBookmarkedSegment(filename, startSec) ? "★" : "☆";
+              bookmark.textContent = getBookmarkSymbol(filename, startSec);
             });
 
             row.appendChild(bookmark);
