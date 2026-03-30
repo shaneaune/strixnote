@@ -1994,11 +1994,13 @@ Major UI Systems
               }
             }
 
+            const isTranscriptOpen = () => transcriptWrap.classList.contains("open");
+
             if (tsToggle && !tsToggle.dataset.wired) {
               tsToggle.dataset.wired = "1";
               tsToggle.addEventListener("change", async (ev) => {
                 ev.stopPropagation();
-                if (!transcriptWrap.classList.contains("open")) return;
+                if (!isTranscriptOpen()) return;
 
                 setTranscriptLoading();
                 try {
