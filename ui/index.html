@@ -1968,6 +1968,10 @@ Major UI Systems
               if (w !== transcriptWrap) closeWrap(w);
             });
 
+            const setTranscriptLoadError = (err) => {
+              transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
+            };
+
             const isOpen = transcriptWrap.classList.contains("open");
             if (isOpen) {
               closeWrap(transcriptWrap);
@@ -1982,7 +1986,7 @@ Major UI Systems
                 await renderTranscriptAndResize();
                 transcriptBox.dataset.loaded = "1";
               } catch (err) {
-                transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
+                setTranscriptLoadError(err);
               }
             }
 
@@ -1996,7 +2000,7 @@ Major UI Systems
                 try {
                   await renderTranscriptAndResize();
                 } catch (err) {
-                  transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
+                  setTranscriptLoadError(err);
                 }
               });
             }
