@@ -1915,6 +1915,19 @@ Major UI Systems
             setTimeout(() => { w.style.display = "none"; }, 180);
           };
 
+          const openWrap = (wrap, button) => {
+            wrap.style.display = "block";
+            wrap.classList.add("open");
+            wrap.style.opacity = "0";
+            wrap.style.maxHeight = "0px";
+            if (button) button.textContent = "Hide";
+
+            requestAnimationFrame(() => {
+              wrap.style.opacity = "1";
+              wrap.style.maxHeight = wrap.scrollHeight + "px";
+            });
+          };
+
           const renderTranscript = async () => {
             const base = getBaseNameSafe(filename);
             const wantTs = !(tsToggle && tsToggle.checked);
@@ -1933,6 +1946,11 @@ Major UI Systems
               selectedClipSegments,
               refreshClipActions
             });
+          };
+
+          const renderTranscriptAndResize = async () => {
+            await renderTranscript();
+            transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
           };
 
           if (dlBtn && !dlBtn.dataset.wired) {
@@ -1956,23 +1974,13 @@ Major UI Systems
               return;
             }
 
-            transcriptWrap.style.display = "block";
-            transcriptWrap.classList.add("open");
-            transcriptWrap.style.opacity = "0";
-            transcriptWrap.style.maxHeight = "0px";
-            textBtn.textContent = "Hide";
-
-            requestAnimationFrame(() => {
-              transcriptWrap.style.opacity = "1";
-              transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
-            });
+            openWrap(transcriptWrap, textBtn);
 
             if (!transcriptBox.dataset.loaded) {
               transcriptBox.textContent = "Loading...";
               try {
-                await renderTranscript();
+                await renderTranscriptAndResize();
                 transcriptBox.dataset.loaded = "1";
-                transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
               } catch (err) {
                 transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
               }
@@ -1986,8 +1994,7 @@ Major UI Systems
 
                 transcriptBox.textContent = "Loading...";
                 try {
-                  await renderTranscript();
-                  transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
+                  await renderTranscriptAndResize();
                 } catch (err) {
                   transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
                 }
