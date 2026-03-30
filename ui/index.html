@@ -1976,6 +1976,10 @@ Major UI Systems
               transcriptBox.textContent = "Loading...";
             };
 
+            const markTranscriptLoaded = () => {
+              transcriptBox.dataset.loaded = "1";
+            };
+
             const isOpen = transcriptWrap.classList.contains("open");
             if (isOpen) {
               closeWrap(transcriptWrap);
@@ -1988,7 +1992,7 @@ Major UI Systems
               setTranscriptLoading();
               try {
                 await renderTranscriptAndResize();
-                transcriptBox.dataset.loaded = "1";
+                markTranscriptLoaded();
               } catch (err) {
                 setTranscriptLoadError(err);
               }
