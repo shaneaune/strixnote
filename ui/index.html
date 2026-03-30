@@ -1980,6 +1980,18 @@ Major UI Systems
               transcriptBox.dataset.loaded = "1";
             };
 
+            const loadTranscriptIfNeeded = async () => {
+              if (transcriptBox.dataset.loaded) return;
+
+              setTranscriptLoading();
+              try {
+                await renderTranscriptAndResize();
+                markTranscriptLoaded();
+              } catch (err) {
+                setTranscriptLoadError(err);
+              }
+            };
+
             const isOpen = transcriptWrap.classList.contains("open");
             if (isOpen) {
               closeWrap(transcriptWrap);
@@ -1988,15 +2000,7 @@ Major UI Systems
 
             openWrap(transcriptWrap, textBtn);
 
-            if (!transcriptBox.dataset.loaded) {
-              setTranscriptLoading();
-              try {
-                await renderTranscriptAndResize();
-                markTranscriptLoaded();
-              } catch (err) {
-                setTranscriptLoadError(err);
-              }
-            }
+            await loadTranscriptIfNeeded();
 
             const isTranscriptOpen = () => transcriptWrap.classList.contains("open");
 
