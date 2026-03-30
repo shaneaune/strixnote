@@ -1972,6 +1972,10 @@ Major UI Systems
               transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
             };
 
+            const setTranscriptLoading = () => {
+              transcriptBox.textContent = "Loading...";
+            };
+
             const isOpen = transcriptWrap.classList.contains("open");
             if (isOpen) {
               closeWrap(transcriptWrap);
@@ -1981,7 +1985,7 @@ Major UI Systems
             openWrap(transcriptWrap, textBtn);
 
             if (!transcriptBox.dataset.loaded) {
-              transcriptBox.textContent = "Loading...";
+              setTranscriptLoading();
               try {
                 await renderTranscriptAndResize();
                 transcriptBox.dataset.loaded = "1";
@@ -1996,7 +2000,7 @@ Major UI Systems
                 ev.stopPropagation();
                 if (!transcriptWrap.classList.contains("open")) return;
 
-                transcriptBox.textContent = "Loading...";
+                setTranscriptLoading();
                 try {
                   await renderTranscriptAndResize();
                 } catch (err) {
