@@ -28,6 +28,7 @@ COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE", "int8")
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".webm"}
 
 SETTINGS_PATH = "/data/config/settings.json"
+STATUS_DIR = "/data/status"
 
 MIN_FREE_BYTES = int(os.environ.get("MIN_FREE_GB", "1")) * 1024 * 1024 * 1024  # default 1 GiB
 
@@ -53,6 +54,61 @@ def wait_for_disk_space(path: str, min_free_bytes: int) -> bool:
         flush=True,
     )
     return False
+
+def progress_filename_for(audio_filename: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", audio_filename).strip("._")
+    if not safe:
+        safe = "file"
+    return f"{safe}.progress.json"
+
+
+def progress_path_for(audio_filename: str) -> str:
+    return os.path.join(STATUS_DIR, progress_filename_for(audio_filename))
+
+
+def write_progress(
+    audio_filename: str,
+    state: str,
+    progress_pct: int,
+    message: str,
+    audio_duration_s: float = 0.0,
+    processed_until_s: float = 0.0,
+    started_at: int | None = None,
+    eta_seconds: int | None = None,
+    error: str = "",
+) -> None:
+    os.makedirs(STATUS_DIR, exist_ok=True)
+
+    now = int(time.time())
+    payload = {
+        "filename": audio_filename,
+        "state": state,
+        "progress_pct": max(0, min(100, int(progress_pct))),
+        "message": message,
+        "audio_duration_s": float(audio_duration_s or 0.0),
+        "processed_until_s": float(processed_until_s or 0.0),
+        "started_at": int(started_at or now),
+        "updated_at": now,
+        "eta_seconds": int(eta_seconds) if eta_seconds is not None else None,
+        "error": error or "",
+    }
+
+    tmp_path = progress_path_for(audio_filename) + ".tmp"
+    final_path = progress_path_for(audio_filename)
+
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=True)
+
+    os.replace(tmp_path, final_path)
+
+
+def remove_progress(audio_filename: str) -> None:
+    try:
+        os.unlink(progress_path_for(audio_filename))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
 
 def load_runtime_settings() -> dict:
     """
@@ -354,7 +410,20 @@ def main():
                     continue
                 processing_path = os.path.join(PROCESSING_DIR, name)
                 shutil.move(path, processing_path)
-                print(f"Transcribing: {name}", flush=True)                
+                print(f"Transcribing: {name}", flush=True)
+
+                started_at = int(time.time())
+                audio_duration_s = probe_duration_seconds(processing_path)
+
+                write_progress(
+                    audio_filename=name,
+                    state="transcribing",
+                    progress_pct=0,
+                    message="Starting transcription...",
+                    audio_duration_s=audio_duration_s,
+                    processed_until_s=0.0,
+                    started_at=started_at,
+                )
 
                 ws = get_whisper_settings()
                 lang = ws["language"]
@@ -377,7 +446,43 @@ def main():
                 except TypeError:
                     segments, _info = model.transcribe(processing_path, **transcribe_kwargs)
 
-                seg_list = list(segments)
+                seg_list = []
+                next_progress_write = 0.0
+
+                for seg in segments:
+                    seg_list.append(seg)
+
+                    processed_until_s = float(getattr(seg, "end", 0.0) or 0.0)
+
+                    if audio_duration_s > 0:
+                        progress_pct = min(
+                            99,
+                            max(1, int((processed_until_s / audio_duration_s) * 100))
+                        )
+                    else:
+                        progress_pct = 0
+
+                    now_ts = time.time()
+                    if now_ts >= next_progress_write:
+                        eta_seconds = None
+                        elapsed_s = max(0.001, now_ts - float(started_at))
+                        if processed_until_s > 0 and audio_duration_s > processed_until_s:
+                            rate = processed_until_s / elapsed_s
+                            if rate > 0:
+                                eta_seconds = int((audio_duration_s - processed_until_s) / rate)
+
+                        write_progress(
+                            audio_filename=name,
+                            state="transcribing",
+                            progress_pct=progress_pct,
+                            message=f"Transcribing... {progress_pct}%",
+                            audio_duration_s=audio_duration_s,
+                            processed_until_s=processed_until_s,
+                            started_at=started_at,
+                            eta_seconds=eta_seconds,
+                        )
+                        next_progress_write = now_ts + 1.0
+
                 full_text = " ".join(s.text.strip() for s in seg_list).strip()
 
                 # Write TXT (human-readable lines)
@@ -389,6 +494,15 @@ def main():
                 write_vtt(seg_list, vtt_path)
 
                 now = int(time.time())
+                write_progress(
+                    audio_filename=name,
+                    state="indexing",
+                    progress_pct=99,
+                    message="Indexing transcript...",
+                    audio_duration_s=audio_duration_s,
+                    processed_until_s=audio_duration_s,
+                    started_at=started_at,
+                )
                 audio_bytes = os.path.getsize(processing_path)
                 duration_s = probe_duration_seconds(processing_path)
 
@@ -445,6 +559,16 @@ def main():
                 # Move original audio
                 shutil.move(processing_path, os.path.join(DONE_DIR, name))
                 processing_path = None
+
+                write_progress(
+                    audio_filename=name,
+                    state="done",
+                    progress_pct=100,
+                    message="Processing complete.",
+                    audio_duration_s=audio_duration_s,
+                    processed_until_s=audio_duration_s,
+                    started_at=started_at,
+                )
 
                 print(f"Done: {name}", flush=True)
 

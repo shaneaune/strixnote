@@ -3289,19 +3289,44 @@ Major UI Systems
           });
         }
         async function pollProcessing(filename, progressWrap, progressContainer, progressPhase) {
+          const progressBar = document.getElementById("uploadProgressBar");
           const maxWaitMs = 30 * 60 * 1000; // 30 minutes safety
           const start = Date.now();
+          let displayedPct = 0;
+          let lastRealPct = 0;
+          let lastState = "";
 
           while (Date.now() - start < maxWaitMs) {
             try {
               const r = await fetch(`/api/status?filename=${encodeURIComponent(filename)}`);
               const data = await r.json();
+              const progress = data.progress || null;
+
+              if (progress && typeof progress.progress_pct === "number") {
+                progressContainer.classList.remove("pulse");
+
+                const targetPct = Math.max(0, Math.min(100, progress.progress_pct));
+                lastRealPct = targetPct;
+                lastState = String(progress.state || data.state || "");
+
+                // never move backwards
+                if (targetPct > displayedPct) {
+                  const step = Math.max(1, Math.ceil((targetPct - displayedPct) * 0.35));
+                  displayedPct = Math.min(targetPct, displayedPct + step);
+                }
+
+                progressBar.style.width = `${displayedPct}%`;
+              }
+
+              if (progress && progress.message) {
+                progressPhase.textContent = progress.message;
+              }
 
               if (data.state === "done") {
                 progressContainer.classList.remove("pulse");
+                progressBar.style.width = "100%";
                 progressPhase.textContent = "Processing complete.";
 
-                // If Browse tab is active, refresh the list automatically
                 refreshBrowseIfVisible();
 
                 setTimeout(() => {
@@ -3320,7 +3345,17 @@ Major UI Systems
               console.log("Status poll error:", e);
             }
 
-            await new Promise(r => setTimeout(r, 2000));
+            for (let i = 0; i < 10; i++) {
+              if (lastState === "transcribing") {
+                const softCap = Math.min(95, lastRealPct + 12);
+                if (displayedPct < softCap) {
+                  displayedPct = Math.min(softCap, displayedPct + 1);
+                  progressBar.style.width = `${displayedPct}%`;
+                }
+              }
+
+              await new Promise(r => setTimeout(r, 200));
+            }
           }
 
           progressContainer.classList.remove("pulse");

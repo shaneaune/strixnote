@@ -24,6 +24,7 @@ import os
 import re
 import time
 import shutil
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -37,6 +38,7 @@ app = Flask(__name__)
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 INCOMING_DIR = os.environ.get("INCOMING_DIR", f"{DATA_DIR}/incoming")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", f"{DATA_DIR}/processed")
+STATUS_DIR = os.environ.get("STATUS_DIR", f"{DATA_DIR}/status")
 
 def make_clip_output_path(base_name: str) -> str:
     safe = re.sub(r"[^a-zA-Z0-9._-]", "_", base_name)
@@ -123,6 +125,22 @@ def safe_id_from_filename(filename: str) -> str:
     base = Path(filename).stem
     return re.sub(r"[^A-Za-z0-9_-]+", "_", base).strip("_") or "file"
 
+def progress_path_for(filename: str) -> Path:
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("._")
+    if not safe:
+        safe = "file"
+    return Path(STATUS_DIR) / f"{safe}.progress.json"
+
+
+def read_progress(filename: str) -> dict | None:
+    try:
+        p = progress_path_for(filename)
+        if not p.exists():
+            return None
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 def _meili_request(method: str, path: str, json_body=None, timeout=5):
     url = f"{MEILI_URL}{path}"
@@ -831,7 +849,11 @@ def status():
     processed_srt = Path(PROCESSED_DIR) / f"{base}.srt"
     processed_vtt = Path(PROCESSED_DIR) / f"{base}.vtt"
 
-    if processed_audio.exists() and processed_txt.exists():
+    progress = read_progress(filename)
+
+    if progress:
+        state = progress.get("state", "processing")
+    elif processed_audio.exists() and processed_txt.exists():
         state = "done"
     elif processing_path.exists():
         state = "processing"
@@ -856,6 +878,7 @@ def status():
             "state": state,
             "filename": filename,
             "base": base,
+            "progress": progress,
             "disk": {
                 "incoming_free_bytes": incoming_free_b,
                 "processed_free_bytes": processed_free_b,
