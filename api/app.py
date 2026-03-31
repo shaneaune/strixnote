@@ -549,8 +549,146 @@ def upload():
     if not files:
         return jsonify({"error": "no files"}), 400
 
+    merge_uploads = str(request.form.get("merge_uploads", "0")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
     saved = []
     rejected = []
+
+    if merge_uploads:
+        temp_paths = []
+        list_path = None
+
+        try:
+            for i, f in enumerate(files, start=1):
+                orig = sanitize_filename(f.filename or "")
+                if not orig:
+                    rejected.append({"filename": "", "reason": "empty filename"})
+                    continue
+
+                ext = Path(orig).suffix.lower()
+                if ext not in AUDIO_EXTS:
+                    rejected.append(
+                        {"filename": orig, "reason": f"unsupported extension {ext}"}
+                    )
+                    continue
+
+                try:
+                    f.stream.seek(0, os.SEEK_END)
+                    size = f.stream.tell()
+                    f.stream.seek(0)
+                except Exception:
+                    size = None
+
+                if size is not None and size > MAX_UPLOAD_BYTES:
+                    rejected.append(
+                        {
+                            "filename": orig,
+                            "reason": f"file too large ({size} bytes > {MAX_UPLOAD_BYTES} bytes)",
+                        }
+                    )
+                    continue
+
+                temp_name = f"merge_src_{int(time.time() * 1000)}_{i:03d}{ext}"
+                temp_path = Path("/tmp") / temp_name
+                f.save(str(temp_path))
+
+                final_size = temp_path.stat().st_size
+                if final_size > MAX_UPLOAD_BYTES:
+                    temp_path.unlink(missing_ok=True)
+                    rejected.append(
+                        {
+                            "filename": orig,
+                            "reason": f"file too large ({final_size} bytes > {MAX_UPLOAD_BYTES} bytes)",
+                        }
+                    )
+                    continue
+
+                temp_paths.append(temp_path)
+
+            if len(temp_paths) < 2:
+                return jsonify(
+                    {
+                        "saved": [],
+                        "rejected": rejected + [{"filename": "", "reason": "need at least two valid files to merge"}],
+                    }
+                ), 400
+
+            merged_name = f"merged_{int(time.time() * 1000)}.wav"
+            dest = Path(INCOMING_DIR) / merged_name
+
+            while dest.exists() or (Path(PROCESSED_DIR) / merged_name).exists():
+                merged_name = f"merged_{int(time.time() * 1000)}_{os.getpid()}.wav"
+                dest = Path(INCOMING_DIR) / merged_name
+
+            list_path = Path("/tmp") / f"merge_list_{int(time.time() * 1000)}.txt"
+            with open(list_path, "w", encoding="utf-8") as lf:
+                for p in temp_paths:
+                    escaped = str(p).replace("'", "'\\''")
+                    lf.write(f"file '{escaped}'\n")
+
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(list_path),
+                    "-vn",
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "16000",
+                    str(dest),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+
+            final_size = dest.stat().st_size
+            if final_size > MAX_UPLOAD_BYTES:
+                dest.unlink(missing_ok=True)
+                return jsonify(
+                    {
+                        "error": f"merged file too large ({final_size} bytes > {MAX_UPLOAD_BYTES} bytes)"
+                    }
+                ), 413
+
+            saved.append({"filename": merged_name, "bytes": final_size})
+            return jsonify({"saved": saved, "rejected": rejected})
+
+        except subprocess.CalledProcessError as e:
+            return jsonify(
+                {
+                    "error": "merge failed",
+                    "details": (e.stderr or str(e))[:800],
+                }
+            ), 500
+
+        except Exception as e:
+            return jsonify({"error": f"merge failed: {str(e)}"}), 500
+
+        finally:
+            for p in temp_paths:
+                try:
+                    p.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+            if list_path is not None:
+                try:
+                    list_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     for f in files:
         orig = sanitize_filename(f.filename or "")
@@ -581,6 +719,7 @@ def upload():
                 }
             )
             continue
+
         dest = Path(INCOMING_DIR) / orig
 
         # Hard rule: do not overwrite existing files
@@ -606,7 +745,6 @@ def upload():
         saved.append({"filename": orig, "bytes": final_size})
 
     return jsonify({"saved": saved, "rejected": rejected})
-
 
 @app.post("/meili/search/<index>")
 def meili_search(index: str):
