@@ -15,6 +15,7 @@ IN_DIR = "/data/incoming"
 PROCESSING_DIR = "/data/incoming/.processing"
 OUT_DIR = "/data/processed"
 DONE_DIR = "/data/processed"
+FAILED_DIR = "/data/processed/_failed"
 
 MEILI_URL = "http://meilisearch:7700"
 MEILI_MASTER_KEY = os.environ.get("MEILI_MASTER_KEY", "")
@@ -428,6 +429,7 @@ def main():
     os.makedirs(IN_DIR, exist_ok=True)
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(DONE_DIR, exist_ok=True)
+    os.makedirs(FAILED_DIR, exist_ok=True)
 
     model = WhisperModel(
         MODEL_NAME,
@@ -676,7 +678,16 @@ def main():
                 print(f"ERROR processing {name}: {e}", flush=True)
                 try:
                     if processing_path and os.path.exists(processing_path):
-                        shutil.move(processing_path, os.path.join(DONE_DIR, name))
+                        failed_path = os.path.join(FAILED_DIR, name)
+
+                        if os.path.exists(failed_path):
+                            base, ext = os.path.splitext(name)
+                            failed_path = os.path.join(
+                                FAILED_DIR,
+                                f"{base}_{int(time.time())}{ext}"
+                            )
+
+                        shutil.move(processing_path, failed_path)
                 except Exception:
                     pass
 
