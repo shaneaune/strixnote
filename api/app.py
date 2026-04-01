@@ -1239,6 +1239,7 @@ DEFAULT_SETTINGS = {
         "language": "",  # "" = auto
         "beam_size": 5,  # int
         "vad_filter": False,  # bool
+        "vad_mode": "off",  # off|conservative|balanced|aggressive|noisy
     },
     "meili": {
         "typo_tolerance": True,  # bool
@@ -1332,6 +1333,12 @@ def validate_settings(raw: dict) -> dict:
         w.get("vad_filter", DEFAULT_SETTINGS["whisper"]["vad_filter"]),
         DEFAULT_SETTINGS["whisper"]["vad_filter"],
     )
+
+    # whisper.vad_mode: one of the supported preset names
+    vad_mode = str(w.get("vad_mode", DEFAULT_SETTINGS["whisper"]["vad_mode"]) or "off").strip().lower()
+    if vad_mode not in ("off", "conservative", "balanced", "aggressive", "noisy"):
+        vad_mode = "off"
+    cleaned["whisper"]["vad_mode"] = vad_mode
 
     # meili.typo_tolerance: bool
     cleaned["meili"]["typo_tolerance"] = _coerce_bool(

@@ -504,6 +504,7 @@ def main():
                 lang = ws["language"]
                 beam = ws["beam_size"]
                 vad = ws["vad_filter"]
+                vad_mode = ws.get("vad_mode", "off")
                 print(
                     f"Whisper settings: language={(lang or 'auto')} beam_size={beam} vad_filter={vad}",
                     flush=True,
@@ -519,15 +520,39 @@ def main():
                     started_at=started_at,
                 )
 
+                vad_params = None
+
+                if vad:
+                    if vad_mode == "conservative":
+                        vad_params = {"min_silence_duration_ms": 800}
+                    elif vad_mode == "balanced":
+                        vad_params = {"min_silence_duration_ms": 500}
+                    elif vad_mode == "aggressive":
+                        vad_params = {"min_silence_duration_ms": 250}
+                    elif vad_mode == "noisy":
+                        vad_params = {
+                            "min_silence_duration_ms": 700,
+                            "min_speech_duration_ms": 300,
+                        }
+
                 # Some faster-whisper builds support vad_filter; if not, retry without it.
                 try:
                     with contextlib.redirect_stderr(progress_capture):
-                        segments, _info = model.transcribe(
-                            processing_path,
-                            vad_filter=vad,
-                            log_progress=True,
-                            **transcribe_kwargs,
-                        )
+                        if vad_params:
+                            segments, _info = model.transcribe(
+                                processing_path,
+                                vad_filter=vad,
+                                vad_parameters=vad_params,
+                                log_progress=True,
+                                **transcribe_kwargs,
+                            )
+                        else:
+                            segments, _info = model.transcribe(
+                                processing_path,
+                                vad_filter=vad,
+                                log_progress=True,
+                                **transcribe_kwargs,
+                            )
                 except TypeError:
                     with contextlib.redirect_stderr(progress_capture):
                         segments, _info = model.transcribe(

@@ -192,14 +192,16 @@ Major UI Systems
             </div>
 
             <div style="margin-top:12px;">
-              <div style="display:flex; align-items:flex-start;">
-                <input id="setWhisperVad" type="checkbox" style="margin-top:3px; margin-right:8px;">
-                <label for="setWhisperVad" class="small muted" style="cursor:pointer; user-select:none;">
-                  VAD filter
-                </label>
-              </div>
-              <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px;">
-                Removes silence before transcription. Faster, but may slightly affect timestamp alignment.
+              <div class="small muted" style="margin-bottom:6px;">VAD mode</div>
+              <select id="setWhisperVadMode" style="width:240px; height:38px; padding:6px 10px; box-sizing:border-box;">
+                <option value="off">Off</option>
+                <option value="conservative">Conservative</option>
+                <option value="balanced">Balanced</option>
+                <option value="aggressive">Aggressive</option>
+                <option value="noisy">Noisy audio</option>
+              </select>
+              <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
+                Controls how silence is handled before transcription. Balanced is recommended for most audio.
               </div>
             </div>
             <div class="small muted" style="margin:14px 0 6px;">Browse limit (5–100)</div>
@@ -504,7 +506,7 @@ Major UI Systems
 
         const setWhisperLanguage = document.getElementById("setWhisperLanguage");
         const setWhisperBeam = document.getElementById("setWhisperBeam");
-        const setWhisperVad = document.getElementById("setWhisperVad");
+        const setWhisperVadMode = document.getElementById("setWhisperVadMode");
         const setBrowseLimit = document.getElementById("setBrowseLimit");
         const setTranscriptSegmentation = document.getElementById("setTranscriptSegmentation");
 
@@ -632,7 +634,9 @@ Major UI Systems
 
           if (setWhisperLanguage) setWhisperLanguage.value = (w.language || "");
           if (setWhisperBeam) setWhisperBeam.value = String(w.beam_size ?? 5);
-          if (setWhisperVad) setWhisperVad.checked = !!w.vad_filter;
+          if (setWhisperVadMode) {
+            setWhisperVadMode.value = (w.vad_mode || (w.vad_filter ? "balanced" : "off"));
+          }
           if (setBrowseLimit) setBrowseLimit.value = String(browseLimit);
           if (setTranscriptSegmentation) setTranscriptSegmentation.value = (s.transcript_segmentation_mode || "postprocessed");
           transcriptSegmentationModeValue = (s.transcript_segmentation_mode || "postprocessed");
@@ -658,7 +662,7 @@ Major UI Systems
           const language = (setWhisperLanguage?.value || "").trim();
           const beamSizeRaw = (setWhisperBeam?.value || "").trim();
           const transcriptSegmentation = (setTranscriptSegmentation?.value || "whisper");
-          const vad = !!setWhisperVad?.checked;
+          const vadMode = (setWhisperVadMode?.value || "off");
 
           let nextBrowseLimit = Number((setBrowseLimit?.value || "").trim() || 20);
           if (!Number.isFinite(nextBrowseLimit)) nextBrowseLimit = 20;
@@ -685,7 +689,12 @@ Major UI Systems
 
           const transcriptPostprocess = buildTranscriptPostprocessFromUI();
           const payload = {
-            whisper: { language, beam_size, vad_filter: vad },
+            whisper: {
+              language,
+              beam_size,
+              vad_filter: vadMode !== "off",
+              vad_mode: vadMode
+            },
             meili: { typo_tolerance, synonyms },
             transcript_segmentation_mode: transcriptSegmentation,
 
@@ -3205,7 +3214,7 @@ Major UI Systems
               // Whisper defaults
               if (setWhisperLanguage) setWhisperLanguage.value = "";
               if (setWhisperBeam) setWhisperBeam.value = "5";
-              if (setWhisperVad) setWhisperVad.checked = false;
+              if (setWhisperVadMode) setWhisperVadMode.value = "off";
 
               // Browse defaults
               if (setBrowseLimit) setBrowseLimit.value = "20";
