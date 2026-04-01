@@ -171,12 +171,15 @@ Major UI Systems
       <div id="settingsWrap" class="panel" style="display:none; margin-top:10px;">
         <div style="font-weight:600; margin-bottom:10px;">Settings</div>
         <div class="small muted" style="margin:-4px 0 12px; opacity:0.85;">
-          Changes apply to new files only. Files already transcribing will not be affected. Be sure to Save after any
-          change.
+          Settings are grouped by when they take effect. Be sure to Save after any change.
         </div>
         <div class="row" style="gap:24px; align-items:flex-start; flex-wrap:wrap;">
           <div style="min-width:320px; flex:1;">
-            <div style="font-weight:600; margin-bottom:6px;">Whisper</div>
+            <div style="font-weight:600; margin-bottom:6px;">Transcription defaults (new files only)</div>
+            <div class="small muted" style="font-size:12px; opacity:0.8; margin-bottom:12px; max-width:420px;">
+              These settings affect files that are uploaded and transcribed after you save. Existing files and
+              transcripts will not change.
+            </div>
 
             <div class="small muted" style="margin-bottom:6px;">Language (blank = auto)</div>
             <input id="setWhisperLanguage" placeholder="e.g. en"
@@ -204,13 +207,10 @@ Major UI Systems
                 Controls how silence is handled before transcription. Balanced is recommended for most audio.
               </div>
             </div>
-            <div class="small muted" style="margin:14px 0 6px;">Browse limit (5–100)</div>
-            <input id="setBrowseLimit" type="number" min="5" max="100"
-              style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
-            <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
-              Controls how many results are shown per page in Browse and Search.
-            </div>
-            <div class="small muted" style="margin:14px 0 6px;">Transcript segmentation</div>
+
+            <div style="margin-top:16px; font-weight:600;">Transcript post-processing</div>
+
+            <div class="small muted" style="margin:10px 0 6px;">Transcript segmentation</div>
             <select id="setTranscriptSegmentation"
               style="width:240px; height:38px; padding:6px 10px; box-sizing:border-box;">
               <option value="whisper">Whisper default</option>
@@ -219,8 +219,6 @@ Major UI Systems
             <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
               Controls how transcript lines are segmented for display and clip selection.
             </div>
-
-            <div style="margin-top:16px; font-weight:600;">Transcript post-processing</div>
 
             <div class="small muted" style="margin:10px 0 6px;">Sentence break punctuation</div>
             <input id="setTranscriptPunctuation" placeholder=".?!"
@@ -257,7 +255,18 @@ Major UI Systems
           </div>
 
           <div style="min-width:360px; flex:1; margin-top:24px;">
-            <div style="font-weight:600; margin-bottom:6px;">MeiliSearch</div>
+            <div style="font-weight:600; margin-bottom:6px;">Search and browsing (applies immediately)</div>
+            <div class="small muted" style="font-size:12px; opacity:0.8; margin-bottom:12px; max-width:420px;">
+              These settings affect browsing and search as soon as you save. They do not change how existing files were
+              transcribed.
+            </div>
+
+            <div class="small muted" style="margin:10px 0 6px;">Browse limit (5–100)</div>
+            <input id="setBrowseLimit" type="number" min="5" max="100"
+              style="width:120px; height:38px; padding:6px 10px; box-sizing:border-box;" />
+            <div class="small muted" style="font-size:12px; opacity:0.8; margin-top:6px; max-width:320px;">
+              Controls how many results are shown per page in Browse and Search.
+            </div>
 
             <label class="small muted"
               style="display:flex; gap:8px; align-items:center; margin-bottom:10px; cursor:pointer; user-select:none;">
