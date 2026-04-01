@@ -688,6 +688,20 @@ def main():
                             )
 
                         shutil.move(processing_path, failed_path)
+
+                        error_info_path = failed_path + ".error.json"
+                        with open(error_info_path, "w", encoding="utf-8") as f:
+                            json.dump(
+                                {
+                                    "filename": name,
+                                    "failed_path": failed_path,
+                                    "error": str(e),
+                                    "failed_at": int(time.time()),
+                                },
+                                f,
+                                ensure_ascii=True,
+                                indent=2,
+                            )
                 except Exception:
                     pass
 
