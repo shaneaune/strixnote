@@ -6,6 +6,7 @@ import subprocess
 import time
 import signal
 import sys
+import contextlib
 
 import requests
 from faster_whisper import WhisperModel
@@ -109,6 +110,78 @@ def remove_progress(audio_filename: str) -> None:
         pass
     except Exception:
         pass
+
+class WhisperProgressCapture:
+    def __init__(self, audio_filename: str, audio_duration_s: float, started_at: int):
+        self.audio_filename = audio_filename
+        self.audio_duration_s = float(audio_duration_s or 0.0)
+        self.started_at = int(started_at)
+        self._buffer = ""
+        self._last_write_ts = 0.0
+
+    def write(self, text: str) -> int:
+        if not text:
+            return 0
+
+        self._buffer += str(text)
+
+        parts = re.split(r"[\r\n]+", self._buffer)
+        self._buffer = parts.pop() if parts else ""
+
+        for part in parts:
+            self._handle_line(part)
+
+        return len(text)
+
+    def flush(self) -> None:
+        if self._buffer:
+            self._handle_line(self._buffer)
+            self._buffer = ""
+
+    def _handle_line(self, line: str) -> None:
+        line = str(line or "").strip()
+        if not line:
+            return
+
+        m = re.search(r"(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)", line)
+        if not m:
+            return
+
+        try:
+            processed_until_s = float(m.group(1))
+            total_s = float(m.group(2))
+        except Exception:
+            return
+
+        duration_s = self.audio_duration_s if self.audio_duration_s > 0 else total_s
+        if duration_s <= 0:
+            return
+
+        progress_pct = min(99, max(1, int((processed_until_s / duration_s) * 100)))
+
+        now_ts = time.time()
+        if now_ts - self._last_write_ts < 0.5:
+            return
+
+        eta_seconds = None
+        elapsed_s = max(0.001, now_ts - float(self.started_at))
+        if processed_until_s > 0 and duration_s > processed_until_s:
+            rate = processed_until_s / elapsed_s
+            if rate > 0:
+                eta_seconds = int((duration_s - processed_until_s) / rate)
+
+        write_progress(
+            audio_filename=self.audio_filename,
+            state="transcribing",
+            progress_pct=progress_pct,
+            message=f"Transcribing... {progress_pct}%",
+            audio_duration_s=duration_s,
+            processed_until_s=processed_until_s,
+            started_at=self.started_at,
+            eta_seconds=eta_seconds,
+        )
+        self._last_write_ts = now_ts
+
 
 def load_runtime_settings() -> dict:
     """
@@ -438,50 +511,77 @@ def main():
                 if lang:
                     transcribe_kwargs["language"] = lang
 
+                progress_capture = WhisperProgressCapture(
+                    audio_filename=name,
+                    audio_duration_s=audio_duration_s,
+                    started_at=started_at,
+                )
+
                 # Some faster-whisper builds support vad_filter; if not, retry without it.
                 try:
-                    segments, _info = model.transcribe(
-                        processing_path, vad_filter=vad, **transcribe_kwargs
-                    )
+                    with contextlib.redirect_stderr(progress_capture):
+                        segments, _info = model.transcribe(
+                            processing_path,
+                            vad_filter=vad,
+                            log_progress=True,
+                            **transcribe_kwargs,
+                        )
                 except TypeError:
-                    segments, _info = model.transcribe(processing_path, **transcribe_kwargs)
+                    with contextlib.redirect_stderr(progress_capture):
+                        segments, _info = model.transcribe(
+                            processing_path,
+                            log_progress=True,
+                            **transcribe_kwargs,
+                        )
 
                 seg_list = []
                 next_progress_write = 0.0
+                last_processed_s = 0.0
 
                 for seg in segments:
                     seg_list.append(seg)
 
-                    processed_until_s = float(getattr(seg, "end", 0.0) or 0.0)
-
-                    if audio_duration_s > 0:
-                        progress_pct = min(
-                            99,
-                            max(1, int((processed_until_s / audio_duration_s) * 100))
-                        )
-                    else:
-                        progress_pct = 0
+                    last_processed_s = float(getattr(seg, "end", 0.0) or 0.0)
 
                     now_ts = time.time()
                     if now_ts >= next_progress_write:
-                        eta_seconds = None
                         elapsed_s = max(0.001, now_ts - float(started_at))
-                        if processed_until_s > 0 and audio_duration_s > processed_until_s:
-                            rate = processed_until_s / elapsed_s
+
+                        if last_processed_s > 0:
+                            rate = last_processed_s / elapsed_s
+                            estimated_processed = min(
+                                audio_duration_s,
+                                last_processed_s + rate * 0.5,
+                            )
+                        else:
+                            estimated_processed = 0.0
+
+                        if audio_duration_s > 0:
+                            progress_pct = min(
+                                99,
+                                max(1, int((estimated_processed / audio_duration_s) * 100))
+                            )
+                        else:
+                            progress_pct = 0
+
+                        eta_seconds = None
+                        if last_processed_s > 0 and audio_duration_s > last_processed_s:
+                            rate = last_processed_s / elapsed_s
                             if rate > 0:
-                                eta_seconds = int((audio_duration_s - processed_until_s) / rate)
+                                eta_seconds = int((audio_duration_s - last_processed_s) / rate)
 
                         write_progress(
                             audio_filename=name,
                             state="transcribing",
                             progress_pct=progress_pct,
-                            message=f"Transcribing... {progress_pct}%",
+                            message="Transcribing...",
                             audio_duration_s=audio_duration_s,
-                            processed_until_s=processed_until_s,
+                            processed_until_s=estimated_processed,
                             started_at=started_at,
                             eta_seconds=eta_seconds,
                         )
-                        next_progress_write = now_ts + 1.0
+
+                        next_progress_write = now_ts + 0.5
 
                 full_text = " ".join(s.text.strip() for s in seg_list).strip()
 

@@ -3290,11 +3290,29 @@ Major UI Systems
         }
         async function pollProcessing(filename, progressWrap, progressContainer, progressPhase) {
           const progressBar = document.getElementById("uploadProgressBar");
+          if (!progressBar) {
+            console.warn("progressBar not found");
+            return;
+          }
+
           const maxWaitMs = 30 * 60 * 1000; // 30 minutes safety
           const start = Date.now();
           let displayedPct = 0;
           let lastRealPct = 0;
           let lastState = "";
+
+          function formatClock(totalSeconds) {
+            const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+
+            if (h > 0) {
+              return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+            }
+
+            return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+          }
 
           while (Date.now() - start < maxWaitMs) {
             try {
@@ -3302,24 +3320,57 @@ Major UI Systems
               const data = await r.json();
               const progress = data.progress || null;
 
-              if (progress && typeof progress.progress_pct === "number") {
-                progressContainer.classList.remove("pulse");
-
-                const targetPct = Math.max(0, Math.min(100, progress.progress_pct));
-                lastRealPct = targetPct;
+              if (progress) {
                 lastState = String(progress.state || data.state || "");
 
-                // never move backwards
-                if (targetPct > displayedPct) {
-                  const step = Math.max(1, Math.ceil((targetPct - displayedPct) * 0.35));
-                  displayedPct = Math.min(targetPct, displayedPct + step);
-                }
+                if (lastState === "transcribing" || lastState === "indexing") {
+                  progressContainer.classList.add("pulse");
+                  progressBar.style.width = "100%";
+                } else {
+                  progressContainer.classList.remove("pulse");
 
-                progressBar.style.width = `${displayedPct}%`;
+                  if (typeof progress.progress_pct === "number") {
+                    const targetPct = Math.max(0, Math.min(100, progress.progress_pct));
+                    lastRealPct = targetPct;
+                    displayedPct = targetPct;
+                    progressBar.style.width = `${displayedPct}%`;
+                  }
+                }
               }
 
-              if (progress && progress.message) {
-                progressPhase.textContent = progress.message;
+              if (progress) {
+                const elapsedSec = progress.started_at
+                  ? Math.max(0, Math.floor(Date.now() / 1000) - Number(progress.started_at || 0))
+                  : 0;
+
+                const audioDurationSec = Math.max(0, Number(progress.audio_duration_s || 0));
+                const etaSec = progress.eta_seconds == null ? null : Math.max(0, Number(progress.eta_seconds || 0));
+                const baseMessage = progress.message || "Processing...";
+
+                if (progress.state === "transcribing") {
+                  const parts = [baseMessage, `elapsed ${formatClock(elapsedSec)}`];
+
+                  if (audioDurationSec > 0) {
+                    parts.push(`audio ${formatClock(audioDurationSec)}`);
+                  }
+
+                  const processedSec = Math.max(0, Number(progress.processed_until_s || 0));
+                  const processedRatio = audioDurationSec > 0 ? (processedSec / audioDurationSec) : 0;
+
+                  if (audioDurationSec > 0 && audioDurationSec <= 120) {
+                    parts.push("less than 2 min remaining");
+                  } else if (etaSec != null && elapsedSec >= 5 && processedRatio >= 0.10) {
+                    parts.push(`about ${formatClock(etaSec)} remaining`);
+                  } else if (elapsedSec >= 3) {
+                    parts.push("estimating time remaining");
+                  }
+
+                  progressPhase.textContent = parts.join(" - ");
+                } else if (progress.state === "indexing") {
+                  progressPhase.textContent = `${baseMessage} - elapsed ${formatClock(elapsedSec)}`;
+                } else {
+                  progressPhase.textContent = baseMessage;
+                }
               }
 
               if (data.state === "done") {
