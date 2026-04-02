@@ -915,6 +915,7 @@ def delete():
         Path(PROCESSED_DIR) / f"{base}.txt",
         Path(PROCESSED_DIR) / f"{base}.srt",
         Path(PROCESSED_DIR) / f"{base}.vtt",
+        Path(PROCESSED_DIR) / f"{base}.words.json",
         progress_path_for(filename),
     ]
 
