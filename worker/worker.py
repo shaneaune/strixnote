@@ -539,27 +539,30 @@ def main():
                 try:
                     with contextlib.redirect_stderr(progress_capture):
                         if vad_params:
-                            segments, _info = model.transcribe(
-                                processing_path,
-                                vad_filter=vad,
-                                vad_parameters=vad_params,
-                                log_progress=True,
-                                **transcribe_kwargs,
-                            )
+                              segments, _info = model.transcribe(
+                                  processing_path,
+                                  vad_filter=vad,
+                                  vad_parameters=vad_params,
+                                  word_timestamps=True,
+                                  log_progress=True,
+                                  **transcribe_kwargs,
+                              )
                         else:
-                            segments, _info = model.transcribe(
-                                processing_path,
-                                vad_filter=vad,
-                                log_progress=True,
-                                **transcribe_kwargs,
-                            )
+                              segments, _info = model.transcribe(
+                                  processing_path,
+                                  vad_filter=vad,
+                                  word_timestamps=True,
+                                  log_progress=True,
+                                  **transcribe_kwargs,
+                              )
                 except TypeError:
                     with contextlib.redirect_stderr(progress_capture):
-                        segments, _info = model.transcribe(
-                            processing_path,
-                            log_progress=True,
-                            **transcribe_kwargs,
-                        )
+                      segments, _info = model.transcribe(
+                          processing_path,
+                          word_timestamps=True,
+                          log_progress=True,
+                          **transcribe_kwargs,
+                      )
 
                 seg_list = []
                 next_progress_write = 0.0
@@ -619,6 +622,36 @@ def main():
                 # Write SRT + VTT (VTT is for HTML5 track)
                 write_srt(seg_list, srt_path)
                 write_vtt(seg_list, vtt_path)
+
+                words_json_path = os.path.join(OUT_DIR, base + ".words.json")
+                words_payload = {
+                    "filename": name,
+                    "segments": [],
+                }
+
+                for seg in seg_list:
+                    seg_words = []
+                    for w in (getattr(seg, "words", None) or []):
+                        seg_words.append(
+                            {
+                                "word": str(getattr(w, "word", "") or "").strip(),
+                                "start": float(getattr(w, "start", 0.0) or 0.0),
+                                "end": float(getattr(w, "end", 0.0) or 0.0),
+                                "probability": float(getattr(w, "probability", 0.0) or 0.0),
+                            }
+                        )
+
+                    words_payload["segments"].append(
+                        {
+                            "start": float(getattr(seg, "start", 0.0) or 0.0),
+                            "end": float(getattr(seg, "end", 0.0) or 0.0),
+                            "text": str(getattr(seg, "text", "") or "").strip(),
+                            "words": seg_words,
+                        }
+                    )
+
+                with open(words_json_path, "w", encoding="utf-8") as f:
+                    json.dump(words_payload, f, ensure_ascii=True, indent=2)
 
                 now = int(time.time())
                 write_progress(
