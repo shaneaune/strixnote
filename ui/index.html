@@ -1520,11 +1520,16 @@ Major UI Systems
 
             marker.title = seg.startLabel;
 
-            marker.addEventListener("click", (e) => {
-              e.stopPropagation();
+              marker.addEventListener("click", (e) => {
+                e.stopPropagation();
 
-              playFromSegment(filename, seg.startSec);
-            });
+                if (currentFile === filename && player.src) {
+                  player.currentTime = seg.startSec;
+                  player.play().catch(() => { });
+                } else {
+                  loadFile(filename, seg.startSec * 1000);
+                }
+              });
 
             segmentTimeline.appendChild(marker);
 
@@ -2552,7 +2557,10 @@ Major UI Systems
             sort: [(isFiles || isFilename) ? `created_at:${searchSortOrder?.value || "desc"}` : "created_at:desc"],
             attributesToHighlight: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             attributesToCrop: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
-            cropLength: 60
+            cropLength: 60,
+            highlightPreTag: "<mark>",
+            highlightPostTag: "</mark>",
+            showMatchesPosition: true
           };
 
           if (isFiles) {
