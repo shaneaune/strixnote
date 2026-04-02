@@ -1133,6 +1133,47 @@ Major UI Systems
           let hardMaxSec = Number(transcriptMaxSecValue);
           if (!Number.isFinite(hardMaxSec)) hardMaxSec = TRANSCRIPT_DEFAULTS.maxSec;
 
+          const splitByWordGaps = (seg) => {
+            if (!pauseSplitEnabledValue || !Array.isArray(seg.words) || seg.words.length < 2) {
+              return null;
+            }
+
+            const result = [];
+            let currentWords = [seg.words[0]];
+
+            for (let i = 1; i < seg.words.length; i++) {
+              const prev = seg.words[i - 1];
+              const curr = seg.words[i];
+
+              const gap = Number(curr.start || 0) - Number(prev.end || 0);
+
+              if (gap >= pauseThresholdValue) {
+                result.push([...currentWords]);
+                currentWords = [curr];
+              } else {
+                currentWords.push(curr);
+              }
+            }
+
+            if (currentWords.length) {
+              result.push(currentWords);
+            }
+
+            if (result.length <= 1) return null;
+
+            return result.map(words => {
+              const startSec = Number(words[0].start || 0);
+              const endSec = Number(words[words.length - 1].end || startSec);
+              const text = words.map(w => String(w.word || "").trim()).join(" ").trim();
+
+              return {
+                startSec,
+                endSec,
+                text,
+              };
+            });
+          };
+
           const splitCompletedSentences = (text) => {
             let remaining = String(text || "").trim();
             const complete = [];
@@ -1297,92 +1338,97 @@ Major UI Systems
           };
 
           for (const seg of rawSegments) {
-            const startSec = Number(seg?.startSec || 0);
-            const endSec = Number(seg?.endSec || startSec);
-            const text = String(seg?.text || "").trim();
-            if (!text) continue;
+            const splitWordSegments = splitByWordGaps(seg);
+            const segmentsToProcess = splitWordSegments || [seg];
 
-            if (!current) {
-              current = {
-                startSec,
-                endSec,
-                text,
-                parts: [{ startSec, endSec, text }],
-              };
-            } else {
-              // Pause-aware split must happen BEFORE merging the new segment
-              if (pauseSplitEnabledValue && current.endSec != null) {
-                const gap = startSec - current.endSec;
-                if (gap >= pauseThresholdValue) {
-                  const splitPause = splitCompletedSentences(current.text);
+            for (const segPart of segmentsToProcess) {
+              const startSec = Number(segPart?.startSec || 0);
+              const endSec = Number(segPart?.endSec || startSec);
+              const text = String(segPart?.text || "").trim();
+              if (!text) continue;
 
-                  if (splitPause.complete.length) {
-                    emitSentences(current.startSec, current.endSec, splitPause.complete);
-                  } else {
+              if (!current) {
+                current = {
+                  startSec,
+                  endSec,
+                  text,
+                  parts: [{ startSec, endSec, text }],
+                };
+              } else {
+                // Pause-aware split must happen BEFORE merging the new segment
+                if (pauseSplitEnabledValue && current.endSec != null) {
+                  const gap = startSec - current.endSec;
+                  if (gap >= pauseThresholdValue) {
+                    const splitPause = splitCompletedSentences(current.text);
+
+                    if (splitPause.complete.length) {
+                      emitSentences(current.startSec, current.endSec, splitPause.complete);
+                    } else {
+                      out.push({
+                        startSec: current.startSec,
+                        endSec: current.endSec,
+                        startLabel: secondsToHMS(current.startSec),
+                        text: current.text,
+                      });
+                    }
+
+                    current = {
+                      startSec,
+                      endSec,
+                      text,
+                      parts: [{ startSec, endSec, text }],
+                    };
+                    continue;
+                  }
+                }
+
+                current.endSec = endSec;
+                current.text = `${current.text} ${text}`.replace(/\s+/g, " ").trim();
+                current.parts = [...(current.parts || []), { startSec, endSec, text }];
+              }
+
+              const split = splitCompletedSentences(current.text);
+
+              if (split.complete.length) {
+                const lastEnd = emitSentences(current.startSec, current.endSec, split.complete, current.parts, !!split.remaining);
+
+                if (split.remaining) {
+                  current = {
+                    startSec: lastEnd,
+                    endSec: current.endSec,
+                    text: split.remaining,
+                    parts: current.parts || [],
+                  };
+                } else {
+                  current = null;
+                }
+              } else {
+                const duration = current.endSec - current.startSec;
+                if (duration >= hardMaxSec) {
+                  const words = String(current.text || "").trim().split(/\s+/).filter(Boolean);
+                  const chunkCount = Math.max(1, Math.min(words.length || 1, Math.ceil(duration / hardMaxSec)));
+                  let wordIndex = 0;
+
+                  for (let chunkIdx = 0; chunkIdx < chunkCount; chunkIdx++) {
+                    const remainingChunks = chunkCount - chunkIdx;
+                    const remainingWords = words.length - wordIndex;
+                    const takeCount = Math.max(1, Math.ceil(remainingWords / remainingChunks));
+                    const chunkWords = words.slice(wordIndex, wordIndex + takeCount);
+                    wordIndex += takeCount;
+
+                    const chunkStart = current.startSec + (chunkIdx * hardMaxSec);
+                    const chunkEnd = Math.min(current.endSec, chunkStart + hardMaxSec);
+
                     out.push({
-                      startSec: current.startSec,
-                      endSec: current.endSec,
-                      startLabel: secondsToHMS(current.startSec),
-                      text: current.text,
+                      startSec: chunkStart,
+                      endSec: chunkEnd,
+                      startLabel: secondsToHMS(chunkStart),
+                      text: chunkWords.join(" "),
                     });
                   }
 
-                  current = {
-                    startSec,
-                    endSec,
-                    text,
-                    parts: [{ startSec, endSec, text }],
-                  };
-                  continue;
+                  current = null;
                 }
-              }
-
-              current.endSec = endSec;
-              current.text = `${current.text} ${text}`.replace(/\s+/g, " ").trim();
-              current.parts = [...(current.parts || []), { startSec, endSec, text }];
-            }
-
-            const split = splitCompletedSentences(current.text);
-
-            if (split.complete.length) {
-              const lastEnd = emitSentences(current.startSec, current.endSec, split.complete, current.parts, !!split.remaining);
-
-              if (split.remaining) {
-                current = {
-                  startSec: lastEnd,
-                  endSec: current.endSec,
-                  text: split.remaining,
-                  parts: current.parts || [],
-                };
-              } else {
-                current = null;
-              }
-            } else {
-              const duration = current.endSec - current.startSec;
-              if (duration >= hardMaxSec) {
-                const words = String(current.text || "").trim().split(/\s+/).filter(Boolean);
-                const chunkCount = Math.max(1, Math.min(words.length || 1, Math.ceil(duration / hardMaxSec)));
-                let wordIndex = 0;
-
-                for (let chunkIdx = 0; chunkIdx < chunkCount; chunkIdx++) {
-                  const remainingChunks = chunkCount - chunkIdx;
-                  const remainingWords = words.length - wordIndex;
-                  const takeCount = Math.max(1, Math.ceil(remainingWords / remainingChunks));
-                  const chunkWords = words.slice(wordIndex, wordIndex + takeCount);
-                  wordIndex += takeCount;
-
-                  const chunkStart = current.startSec + (chunkIdx * hardMaxSec);
-                  const chunkEnd = Math.min(current.endSec, chunkStart + hardMaxSec);
-
-                  out.push({
-                    startSec: chunkStart,
-                    endSec: chunkEnd,
-                    startLabel: secondsToHMS(chunkStart),
-                    text: chunkWords.join(" "),
-                  });
-                }
-
-                current = null;
               }
             }
           }
