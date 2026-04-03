@@ -866,6 +866,11 @@ Major UI Systems
           );
         }
 
+        function removeAllBookmarksForFile(filename) {
+          const list = getBookmarks().filter(b => b.filename !== filename);
+          saveBookmarks(list);
+        }
+
         function renderBookmarks() {
           const list = getBookmarks();
 
@@ -1520,16 +1525,16 @@ Major UI Systems
 
             marker.title = seg.startLabel;
 
-              marker.addEventListener("click", (e) => {
-                e.stopPropagation();
+            marker.addEventListener("click", (e) => {
+              e.stopPropagation();
 
-                if (currentFile === filename && player.src) {
-                  player.currentTime = seg.startSec;
-                  player.play().catch(() => { });
-                } else {
-                  loadFile(filename, seg.startSec * 1000);
-                }
-              });
+              if (currentFile === filename && player.src) {
+                player.currentTime = seg.startSec;
+                player.play().catch(() => { });
+              } else {
+                loadFile(filename, seg.startSec * 1000);
+              }
+            });
 
             segmentTimeline.appendChild(marker);
 
@@ -2725,6 +2730,9 @@ Major UI Systems
                     return;
                   }
 
+                  removeAllBookmarksForFile(hit.filename);
+                  renderBookmarks();
+
                   div.remove();
                   refreshBrowseIfVisible();
                 };
@@ -2774,6 +2782,9 @@ Major UI Systems
                   <div class="dt">${epochToLocal(hit.created_at)}</div>
                 </div>
                 <div class="snippet" style="margin-top:6px;">${hit._formatted?.text || hit.text}</div>
+                <div class="small muted" style="margin-top:4px;">
+                 Matches: ${Array.isArray(hit._matchesPosition?.text) ? hit._matchesPosition.text.length : 0}
+                </div>
               </div>
                 <div style="display:flex; gap:8px; align-items:center;">
                   <button class="btn btn-secondary btn-open-transcript"
@@ -2831,7 +2842,7 @@ Major UI Systems
 
                 pendingBrowseTranscriptOpen = {
                   filename: hit.filename,
-                  startSec: Math.floor((hit.start_ms || 0) / 1000),
+                  startSec: Number(hit.start_ms || 0) / 1000,
                 };
 
                 browseOffset = await findBrowseOffsetForFilename(hit.filename);
@@ -3116,6 +3127,9 @@ Major UI Systems
                 }
                 return;
               }
+
+              removeAllBookmarksForFile(hit.filename);
+              renderBookmarks();
 
               div.remove();
             };
