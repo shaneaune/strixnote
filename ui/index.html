@@ -1657,7 +1657,14 @@ Major UI Systems
 
             const text = document.createElement("span");
             text.className = "transcriptText";
-            text.textContent = seg.text;
+
+            const renderedText = String(seg?.highlightedText || seg?.text || "");
+            if (renderedText.includes("<mark>")) {
+              text.innerHTML = renderedText;
+            } else {
+              text.textContent = renderedText;
+            }
+
             text.style.flex = "1";
             text.style.minWidth = "0";
 
@@ -2843,6 +2850,7 @@ Major UI Systems
                 pendingBrowseTranscriptOpen = {
                   filename: hit.filename,
                   startSec: Number(hit.start_ms || 0) / 1000,
+                  highlightedText: hit._formatted?.text || "",
                 };
 
                 browseOffset = await findBrowseOffsetForFilename(hit.filename);
@@ -3205,9 +3213,16 @@ Major UI Systems
                   if (targetRow && transcriptBox) {
                     targetRow.classList.add("selected");
 
-                    setTimeout(() => {
-                      targetRow.classList.remove("selected");
-                    }, 4000);
+                    const transcriptTextEl = targetRow.querySelector(".transcriptText");
+
+                    if (
+                      transcriptTextEl &&
+                      pendingBrowseTranscriptOpen &&
+                      pendingBrowseTranscriptOpen.highlightedText &&
+                      String(pendingBrowseTranscriptOpen.highlightedText).includes("<mark>")
+                    ) {
+                      transcriptTextEl.innerHTML = pendingBrowseTranscriptOpen.highlightedText;
+                    }
 
                     const boxRect = transcriptBox.getBoundingClientRect();
                     const rowRect = targetRow.getBoundingClientRect();
