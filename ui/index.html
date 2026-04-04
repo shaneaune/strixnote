@@ -1906,6 +1906,8 @@ Major UI Systems
           transcriptBox,
           tsToggle,
           dlBtn,
+          prevMatchBtn,
+          nextMatchBtn,
         }) {
           if (!textBtn || !transcriptWrap || !transcriptBox) return;
 
@@ -1914,6 +1916,48 @@ Major UI Systems
           const clipClearBtn = transcriptWrap.querySelector(".btn-clip-clear");
           const clipDownloadBtn = transcriptWrap.querySelector(".btn-clip-download");
           const clipReimportBtn = transcriptWrap.querySelector(".btn-clip-reimport");
+
+          let currentMatchIndex = -1;
+
+          const getMatchRows = () => {
+            return Array.from(transcriptBox.querySelectorAll(".transcriptSeg")).filter((row) => {
+              const textEl = row.querySelector(".transcriptText");
+              return !!(textEl && textEl.querySelector("mark"));
+            });
+          };
+
+          const focusMatchRow = (row) => {
+            if (!row) return;
+
+            transcriptBox.querySelectorAll(".transcriptSeg").forEach((r) => {
+              r.classList.remove("selected");
+            });
+
+            row.classList.add("selected");
+            row.scrollIntoView({ block: "center", behavior: "smooth" });
+
+            const sec = Number(row.dataset.startSec || 0);
+            placePlayerAboveRow(transcriptBox.closest(".result"));
+            if (currentFile === filename && player.src) {
+              player.currentTime = sec;
+              player.play().catch(() => { });
+            } else {
+              loadFile(filename, sec * 1000);
+            }
+          };
+
+          const moveMatch = (direction) => {
+            const rows = getMatchRows();
+            if (!rows.length) return;
+
+            if (currentMatchIndex < 0 || currentMatchIndex >= rows.length) {
+              currentMatchIndex = 0;
+            } else {
+              currentMatchIndex = (currentMatchIndex + direction + rows.length) % rows.length;
+            }
+
+            focusMatchRow(rows[currentMatchIndex]);
+          };
 
           const selectedClipSegments = new Map();
 
@@ -2038,6 +2082,25 @@ Major UI Systems
             });
           }
 
+          if (prevMatchBtn) prevMatchBtn.style.display = "none";
+          if (nextMatchBtn) nextMatchBtn.style.display = "none";
+
+          if (prevMatchBtn && !prevMatchBtn.dataset.wired) {
+            prevMatchBtn.dataset.wired = "1";
+            prevMatchBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              moveMatch(-1);
+            });
+          }
+
+          if (nextMatchBtn && !nextMatchBtn.dataset.wired) {
+            nextMatchBtn.dataset.wired = "1";
+            nextMatchBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              moveMatch(1);
+            });
+          }
+
           const closeWrap = (w) => {
             w.classList.remove("open");
             w.style.maxHeight = "0px";
@@ -2080,6 +2143,17 @@ Major UI Systems
               selectedClipSegments,
               refreshClipActions
             });
+
+            if (searchModeValue === "files" && String(searchQuery || "").trim()) {
+              const searchTerm = String(searchQuery || "").trim();
+              const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+              transcriptBox.querySelectorAll(".transcriptSeg .transcriptText").forEach((el) => {
+                const rawText = el.textContent || "";
+                const re = new RegExp(`(${escapedSearchTerm})`, "ig");
+                el.innerHTML = rawText.replace(re, "<mark>$1</mark>");
+              });
+            }
           };
 
           const renderTranscriptAndResize = async () => {
@@ -2669,18 +2743,28 @@ Major UI Systems
           <div class="transcriptWrap" style="max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease; margin-top:10px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <div class="small muted">Transcript</div>
-            <div style="display:flex; gap:10px; align-items:center;">
-              <button class="btn btn-secondary btn-transcript-download"
-                type="button"
-                data-fn="${hit.filename}"
-                style="height:32px; display:inline-flex; align-items:center;">
-                Download
-              </button>
-              <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
-                 <input type="checkbox" class="tsToggle">
-                  No Timestamps
-              </label>
-            </div>
+                 <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-secondary btn-match-prev"
+                  type="button"
+                  style="height:32px; display:inline-flex; align-items:center;">
+                  Prev match
+                </button>
+                <button class="btn btn-secondary btn-match-next"
+                  type="button"
+                  style="height:32px; display:inline-flex; align-items:center;">
+                  Next match
+                </button>
+                <button class="btn btn-secondary btn-transcript-download"
+                  type="button"
+                  data-fn="${hit.filename}"
+                  style="height:32px; display:inline-flex; align-items:center;">
+                  Download
+                </button>
+                <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+                   <input type="checkbox" class="tsToggle">
+                    No Timestamps
+                </label>
+              </div>
           </div>
           <div class="clipActions small muted" style="display:none; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
               <div class="clipSelectionCount">0 clip segments selected</div>
@@ -2767,6 +2851,8 @@ Major UI Systems
               const transcriptBox = div.querySelector(".transcriptBox");
               const tsToggle = div.querySelector(".tsToggle");
               const dlBtn = div.querySelector(".btn-transcript-download");
+              const prevMatchBtn = div.querySelector(".btn-match-prev");
+              const nextMatchBtn = div.querySelector(".btn-match-next");
 
               wireTranscriptControls({
                 div,
@@ -2776,6 +2862,8 @@ Major UI Systems
                 transcriptBox,
                 tsToggle,
                 dlBtn,
+                prevMatchBtn,
+                nextMatchBtn,
               });
               // transcript toggle (auto-close others)
             } else {
@@ -2851,6 +2939,7 @@ Major UI Systems
                   filename: hit.filename,
                   startSec: Number(hit.start_ms || 0) / 1000,
                   highlightedText: hit._formatted?.text || "",
+                  searchQuery: searchQuery || "",
                 };
 
                 browseOffset = await findBrowseOffsetForFilename(hit.filename);
@@ -3038,18 +3127,28 @@ Major UI Systems
      style="margin-top:10px; max-height:0px; overflow:hidden; opacity:0; transition:max-height 180ms ease, opacity 180ms ease;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
               <div class="small muted">Transcript</div>
-              <div style="display:flex; gap:10px; align-items:center;">
-                <button class="btn btn-secondary btn-transcript-download"
-                  type="button"
-                  data-fn="${hit.filename}"
-                  style="height:32px; display:inline-flex; align-items:center;">
-                  Download
-                </button>
-               <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
-                <input type="checkbox" class="tsToggle">
-                No Timestamps
-               </label>
-              </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <button class="btn btn-secondary btn-match-prev"
+                    type="button"
+                    style="height:32px; display:inline-flex; align-items:center;">
+                    Prev match
+                  </button>
+                  <button class="btn btn-secondary btn-match-next"
+                    type="button"
+                    style="height:32px; display:inline-flex; align-items:center;">
+                    Next match
+                  </button>
+                  <button class="btn btn-secondary btn-transcript-download"
+                    type="button"
+                    data-fn="${hit.filename}"
+                    style="height:32px; display:inline-flex; align-items:center;">
+                    Download
+                  </button>
+                 <label class="small muted" style="display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none;">
+                  <input type="checkbox" class="tsToggle">
+                  No Timestamps
+                 </label>
+                </div>
             </div>
                 <div class="clipActions small muted" style="display:none; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
                 <div class="clipSelectionCount">0 clip segments selected</div>
@@ -3165,6 +3264,11 @@ Major UI Systems
             const tsToggle = div.querySelector(".tsToggle");
 
             const dlBtn = div.querySelector(".btn-transcript-download");
+            const prevMatchBtn = div.querySelector(".btn-match-prev");
+            const nextMatchBtn = div.querySelector(".btn-match-next");
+
+            if (prevMatchBtn) prevMatchBtn.style.display = "none";
+            if (nextMatchBtn) nextMatchBtn.style.display = "none";
 
             wireTranscriptControls({
               div,
@@ -3174,6 +3278,8 @@ Major UI Systems
               transcriptBox,
               tsToggle,
               dlBtn,
+              prevMatchBtn,
+              nextMatchBtn,
             });
 
             if (
@@ -3190,6 +3296,9 @@ Major UI Systems
               pendingBrowseTranscriptOpen &&
               pendingBrowseTranscriptOpen.filename === hit.filename
             ) {
+              if (prevMatchBtn) prevMatchBtn.style.display = "inline-flex";
+              if (nextMatchBtn) nextMatchBtn.style.display = "inline-flex";
+
               placePlayerAboveRow(div);
               loadFile(
                 hit.filename,
@@ -3212,6 +3321,19 @@ Major UI Systems
 
                   if (targetRow && transcriptBox) {
                     targetRow.classList.add("selected");
+
+                    const searchTerm = String(pendingBrowseTranscriptOpen?.searchQuery || "").trim();
+                    const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+                    transcriptBox.querySelectorAll(".transcriptSeg .transcriptText").forEach((el) => {
+                      const rawText = el.textContent || "";
+                      if (escapedSearchTerm) {
+                        const re = new RegExp(`(${escapedSearchTerm})`, "ig");
+                        el.innerHTML = rawText.replace(re, "<mark>$1</mark>");
+                      } else {
+                        el.textContent = rawText;
+                      }
+                    });
 
                     const transcriptTextEl = targetRow.querySelector(".transcriptText");
 
