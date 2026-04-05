@@ -1919,11 +1919,8 @@ Major UI Systems
 
           let currentMatchIndex = -1;
 
-          const getMatchRows = () => {
-            return Array.from(transcriptBox.querySelectorAll(".transcriptSeg")).filter((row) => {
-              const textEl = row.querySelector(".transcriptText");
-              return !!(textEl && textEl.querySelector("mark"));
-            });
+          const getMatchMarks = () => {
+            return Array.from(transcriptBox.querySelectorAll(".transcriptText mark"));
           };
 
           const focusMatchRow = (row) => {
@@ -1947,16 +1944,48 @@ Major UI Systems
           };
 
           const moveMatch = (direction) => {
-            const rows = getMatchRows();
-            if (!rows.length) return;
+            const marks = getMatchMarks();
+            if (!marks.length) return;
 
-            if (currentMatchIndex < 0 || currentMatchIndex >= rows.length) {
+            if (currentMatchIndex < 0 || currentMatchIndex >= marks.length) {
               currentMatchIndex = 0;
             } else {
-              currentMatchIndex = (currentMatchIndex + direction + rows.length) % rows.length;
+              currentMatchIndex = (currentMatchIndex + direction + marks.length) % marks.length;
             }
 
-            focusMatchRow(rows[currentMatchIndex]);
+            updateMatchUi();
+
+            const row = marks[currentMatchIndex].closest(".transcriptSeg");
+            focusMatchRow(row);
+          };;
+
+          const matchCounterEl = transcriptWrap.querySelector(".matchCounter");
+
+          const updateMatchUi = () => {
+            const marks = getMatchMarks();
+            const count = marks.length;
+
+            if (count < 2) {
+              if (prevMatchBtn) prevMatchBtn.style.display = "none";
+              if (nextMatchBtn) nextMatchBtn.style.display = "none";
+              if (matchCounterEl) {
+                matchCounterEl.style.display = "none";
+                matchCounterEl.textContent = "0 / 0";
+              }
+              return;
+            }
+
+            if (prevMatchBtn) prevMatchBtn.style.display = "inline-flex";
+            if (nextMatchBtn) nextMatchBtn.style.display = "inline-flex";
+
+            if (currentMatchIndex < 0 || currentMatchIndex >= count) {
+              currentMatchIndex = 0;
+            }
+
+            if (matchCounterEl) {
+              matchCounterEl.style.display = "inline-block";
+              matchCounterEl.textContent = `${currentMatchIndex + 1} / ${count}`;
+            }
           };
 
           const selectedClipSegments = new Map();
@@ -2152,6 +2181,15 @@ Major UI Systems
                 const rawText = el.textContent || "";
                 const re = new RegExp(`(${escapedSearchTerm})`, "ig");
                 el.innerHTML = rawText.replace(re, "<mark>$1</mark>");
+              });
+            }
+
+            updateMatchUi();
+
+            if (!transcriptBox.dataset.matchUiWired) {
+              transcriptBox.dataset.matchUiWired = "1";
+              transcriptBox.addEventListener("strix:updateMatchUi", () => {
+                updateMatchUi();
               });
             }
           };
@@ -2750,11 +2788,14 @@ Major UI Systems
                   Prev match
                 </button>
                 <button class="btn btn-secondary btn-match-next"
-                  type="button"
-                  style="height:32px; display:inline-flex; align-items:center;">
-                  Next match
-                </button>
-                <button class="btn btn-secondary btn-transcript-download"
+                    type="button"
+                    style="height:32px; display:inline-flex; align-items:center;">
+                    Next match
+                  </button>
+                  <div class="small muted matchCounter" style="min-width:44px; text-align:center; display:none;">
+                    0 / 0
+                  </div>
+                  <button class="btn btn-secondary btn-transcript-download"
                   type="button"
                   data-fn="${hit.filename}"
                   style="height:32px; display:inline-flex; align-items:center;">
@@ -3138,6 +3179,9 @@ Major UI Systems
                     style="height:32px; display:inline-flex; align-items:center;">
                     Next match
                   </button>
+                  <div class="small muted matchCounter" style="min-width:44px; text-align:center; display:none;">
+                    0 / 0
+                  </div>
                   <button class="btn btn-secondary btn-transcript-download"
                     type="button"
                     data-fn="${hit.filename}"
@@ -3334,6 +3378,8 @@ Major UI Systems
                         el.textContent = rawText;
                       }
                     });
+
+                    transcriptBox.dispatchEvent(new CustomEvent("strix:updateMatchUi"));
 
                     const transcriptTextEl = targetRow.querySelector(".transcriptText");
 
