@@ -483,7 +483,7 @@ def ensure_meili_schema():
         _meili_request(
             "PUT",
             f"/indexes/{INDEX_SEGMENTS}/settings/sortable-attributes",
-            json_body=["created_at"],
+            json_body=["created_at", "start_ms"],
             timeout=10,
         )
         summary["steps"].append({"sortable_set": True})

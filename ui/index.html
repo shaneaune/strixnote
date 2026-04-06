@@ -131,6 +131,11 @@ Major UI Systems
             <option value="filename">File name</option>
           </select>
 
+          <select id="segmentOrder" style="max-width:180px; height:38px; padding:6px 10px; box-sizing:border-box;">
+            <option value="relevance">Most relevant</option>
+            <option value="position">First occurrence</option>
+          </select>
+
           <select id="dateField" style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
             <option value="">Any date</option>
             <option value="created_at">Uploaded date</option>
@@ -986,6 +991,17 @@ Major UI Systems
           if (saved === "segments" || saved === "files" || saved === "filename") searchModeValue = saved;
         } catch (e) { }
 
+        const segmentOrder = document.getElementById("segmentOrder");
+
+        const updateSegmentOrderVisibility = () => {
+          if (!segmentOrder) return;
+          segmentOrder.style.display = (searchModeValue === "segments" || searchModeValue === "files")
+            ? "inline-block"
+            : "none";
+        };
+
+        updateSegmentOrderVisibility();
+
         searchMode.addEventListener("change", async () => {
           const v = searchMode.value;
           if (v === "files" || v === "segments" || v === "filename") {
@@ -997,6 +1013,7 @@ Major UI Systems
           try { localStorage.setItem(SEARCH_MODE_KEY, searchModeValue); } catch (e) { }
 
           searchOffset = 0;
+          updateSegmentOrderVisibility();
 
           // focus search box when mode changes
           const q = document.getElementById("searchBox");
@@ -2182,6 +2199,18 @@ Major UI Systems
                 const re = new RegExp(`(${escapedSearchTerm})`, "ig");
                 el.innerHTML = rawText.replace(re, "<mark>$1</mark>");
               });
+
+              const firstMark = transcriptBox.querySelector(".transcriptText mark");
+              if (firstMark) {
+                const targetRow = firstMark.closest(".transcriptSeg");
+                if (targetRow) {
+                  const boxRect = transcriptBox.getBoundingClientRect();
+                  const rowRect = targetRow.getBoundingClientRect();
+                  const rowTopInBox = rowRect.top - boxRect.top + transcriptBox.scrollTop;
+                  const targetTop = rowTopInBox - (transcriptBox.clientHeight / 2) + (rowRect.height / 2);
+                  transcriptBox.scrollTop = Math.max(0, targetTop);
+                }
+              }
             }
 
             updateMatchUi();
@@ -2675,16 +2704,30 @@ Major UI Systems
 
           const isFilename = (searchModeValue === "filename");
           const isFiles = (searchModeValue === "files") || (!searchQuery && !!filter);
+          const isSegments = !isFiles && !isFilename;
+          const segmentOrderMode = segmentOrder?.value || "relevance";
           const index = (isFiles || isFilename) ? INDEX_FILES : INDEX_SEG;
+
+          const requestLimit = (isSegments && segmentOrderMode === "position")
+            ? Math.max(200, browseLimit * 10)
+            : browseLimit;
+
+          const requestOffset = (isSegments && segmentOrderMode === "position")
+            ? 0
+            : searchOffset;
 
           const req = {
             q: searchQuery,
-            limit: browseLimit,
-            offset: searchOffset,
+            limit: requestLimit,
+            offset: requestOffset,
             filter: filter || undefined,
-            sort: (isFiles || isFilename)
+            sort: isFilename
               ? [`created_at:${searchSortOrder?.value || "desc"}`]
-              : ["created_at:desc", "start_ms:asc"],
+              : (isFiles
+                ? (segmentOrderMode === "position"
+                  ? ["created_at:desc"]
+                  : undefined)
+                : undefined),
             attributesToHighlight: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             attributesToCrop: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             cropLength: 60,
@@ -2711,6 +2754,26 @@ Major UI Systems
             pagerInfo.textContent = "";
             if (searchSortBar) searchSortBar.style.display = "none";
             return;
+          }
+
+          if (isSegments && segmentOrderMode === "position" && Array.isArray(data?.hits)) {
+            const sortedHits = [...data.hits].sort((a, b) => {
+              const aCreated = Number(a?.created_at || 0);
+              const bCreated = Number(b?.created_at || 0);
+              if (bCreated !== aCreated) return bCreated - aCreated;
+
+              const aStart = Number(a?.start_ms || 0);
+              const bStart = Number(b?.start_ms || 0);
+              return aStart - bStart;
+            });
+
+            const pagedHits = sortedHits.slice(searchOffset, searchOffset + browseLimit);
+
+            data = {
+              ...data,
+              hits: pagedHits,
+              estimatedTotalHits: sortedHits.length,
+            };
           }
 
           resultsDiv.innerHTML = "";
@@ -2838,6 +2901,13 @@ Major UI Systems
         </div>
       </div>
   `;
+
+              setTimeout(() => {
+                const firstMark = div.querySelector(".snippet mark");
+                if (firstMark) {
+                  firstMark.scrollIntoView({ block: "center", behavior: "smooth" });
+                }
+              }, 0);
 
               // click anywhere except buttons/links -> play
               div.onclick = (e) => {
