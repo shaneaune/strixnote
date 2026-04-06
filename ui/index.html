@@ -2191,7 +2191,8 @@ Major UI Systems
             });
 
             if (searchModeValue === "files" && String(searchQuery || "").trim()) {
-              const searchTerm = String(searchQuery || "").trim();
+              const rawQuery = String(searchQuery || "").trim();
+              const searchTerm = /^".+"$/.test(rawQuery) ? rawQuery.slice(1, -1).trim() : rawQuery;
               const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
               transcriptBox.querySelectorAll(".transcriptSeg .transcriptText").forEach((el) => {
