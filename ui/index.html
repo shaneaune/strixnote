@@ -2188,7 +2188,11 @@ Major UI Systems
 
             if (!transcriptBox.dataset.matchUiWired) {
               transcriptBox.dataset.matchUiWired = "1";
-              transcriptBox.addEventListener("strix:updateMatchUi", () => {
+              transcriptBox.addEventListener("strix:updateMatchUi", (ev) => {
+                const idx = Number(ev?.detail?.matchIndex);
+                if (Number.isInteger(idx) && idx >= 0) {
+                  currentMatchIndex = idx;
+                }
                 updateMatchUi();
               });
             }
@@ -2678,7 +2682,9 @@ Major UI Systems
             limit: browseLimit,
             offset: searchOffset,
             filter: filter || undefined,
-            sort: [(isFiles || isFilename) ? `created_at:${searchSortOrder?.value || "desc"}` : "created_at:desc"],
+            sort: (isFiles || isFilename)
+              ? [`created_at:${searchSortOrder?.value || "desc"}`]
+              : ["created_at:desc", "start_ms:asc"],
             attributesToHighlight: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             attributesToCrop: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             cropLength: 60,
@@ -3379,7 +3385,13 @@ Major UI Systems
                       }
                     });
 
-                    transcriptBox.dispatchEvent(new CustomEvent("strix:updateMatchUi"));
+                    const allMarks = Array.from(transcriptBox.querySelectorAll(".transcriptText mark"));
+                    const firstMarkInTargetRow = targetRow.querySelector(".transcriptText mark");
+                    const matchIndex = firstMarkInTargetRow ? allMarks.indexOf(firstMarkInTargetRow) : 0;
+
+                    transcriptBox.dispatchEvent(new CustomEvent("strix:updateMatchUi", {
+                      detail: { matchIndex }
+                    }));
 
                     const transcriptTextEl = targetRow.querySelector(".transcriptText");
 
