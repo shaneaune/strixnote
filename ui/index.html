@@ -420,6 +420,8 @@ Major UI Systems
         const nextPage = document.getElementById("nextPage");
         const browseSortOrder = document.getElementById("browseSortOrder");
         const indexHealthBox = document.getElementById("indexHealthBox");
+        const SEARCH_SORT_KEY = "strixnote_search_sort_order";
+        const BROWSE_SORT_KEY = "strixnote_browse_sort_order";
 
         function setActiveTab(tabName) {
           tabSearch?.classList.toggle("active", tabName === "search");
@@ -1570,6 +1572,9 @@ Major UI Systems
           }
 
           transcriptBox.onkeydown = (e) => {
+            if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT")) {
+              return;
+            }
 
             if (e.key === " ") {
               e.preventDefault();
@@ -1606,6 +1611,10 @@ Major UI Systems
               if (e.key !== " ") return;
 
               const active = document.activeElement;
+              if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT")) {
+                return;
+              }
+
               if (active && active.classList && active.classList.contains("transcriptBox")) {
                 e.preventDefault();
               }
@@ -1654,6 +1663,8 @@ Major UI Systems
             row.addEventListener("click", (e) => {
               e.stopPropagation();
 
+              if (row.classList.contains("editing")) return;
+
               selectRow(rows.indexOf(row));
               transcriptBox.focus();
 
@@ -1666,7 +1677,7 @@ Major UI Systems
             ts.className = "transcriptTs";
             ts.textContent = seg.startLabel;
 
-            const text = document.createElement("span");
+            let text = document.createElement("span");
             text.className = "transcriptText";
 
             const renderedText = String(seg?.highlightedText || seg?.text || "");
@@ -1710,9 +1721,105 @@ Major UI Systems
               }
             });
 
+            const edit = document.createElement("span");
+            edit.className = "transcriptEdit";
+            edit.title = "Edit segment";
+            edit.textContent = "✏️";
+            edit.style.marginRight = "8px";
+
+            const save = document.createElement("span");
+            save.className = "transcriptSave";
+            save.title = "Save segment";
+            save.textContent = "💾";
+            save.style.marginRight = "8px";
+            save.style.display = "none";
+
+            edit.addEventListener("click", (e) => {
+              e.stopPropagation();
+
+              // Only allow editing in Whisper default mode
+              const currentSegMode = transcriptSegmentationModeValue || "whisper";
+              if (currentSegMode !== "whisper") {
+                alert("Editing is only available in Whisper default segmentation mode.");
+                return;
+              }
+
+              if (row.classList.contains("editing")) return;
+
+              row.classList.add("editing");
+
+              const originalText = seg.text || "";
+              const textarea = document.createElement("textarea");
+              textarea.value = originalText;
+              textarea.style.flex = "1";
+              textarea.style.minWidth = "0";
+              textarea.style.fontFamily = "inherit";
+
+              text.replaceWith(textarea);
+              textarea.focus();
+
+              edit.style.display = "none";
+              save.style.display = "";
+            });
+
+            save.addEventListener("click", async (e) => {
+              e.stopPropagation();
+
+              const textarea = row.querySelector("textarea");
+              if (!textarea) return;
+
+              const newText = textarea.value.trim();
+              if (!newText) return;
+
+              save.style.pointerEvents = "none";
+              save.style.opacity = "0.6";
+
+              try {
+                const resp = await fetch("/api/edit-segment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    filename,
+                    startSec: seg.startSec,
+                    text: newText
+                  })
+                });
+
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                  throw new Error(data?.error || resp.statusText || "Save failed");
+                }
+
+                seg.text = newText;
+
+                const newTextEl = document.createElement("span");
+                newTextEl.className = "transcriptText";
+                newTextEl.textContent = newText;
+                newTextEl.style.flex = "1";
+                newTextEl.style.minWidth = "0";
+
+                textarea.replaceWith(newTextEl);
+                text = newTextEl;
+
+                row.classList.remove("editing");
+                edit.style.display = "";
+                save.style.display = "none";
+                edit.textContent = "✏️";
+                edit.title = "Edit segment";
+              } catch (err) {
+                console.warn("Edit save failed", err);
+                alert("Failed to save segment: " + (err?.message || err));
+              } finally {
+                save.style.pointerEvents = "";
+                save.style.opacity = "";
+              }
+            });
+
             row.appendChild(ts);
             row.appendChild(text);
             row.appendChild(copy);
+            row.appendChild(edit);
+            row.appendChild(save);
 
             const getClipSegmentKey = (seg) => {
               const startSec = Number(seg.startSec);
@@ -3495,8 +3602,16 @@ Major UI Systems
 
         if (browseSortOrder) {
           let currentBrowseSort = "desc";
+          try {
+            const savedBrowseSort = localStorage.getItem(BROWSE_SORT_KEY);
+            if (savedBrowseSort === "asc" || savedBrowseSort === "desc") {
+              currentBrowseSort = savedBrowseSort;
+            }
+          } catch (e) { }
 
-          browseSortOrder.textContent = "Newest ↓";
+          browseSortOrder.textContent = currentBrowseSort === "desc"
+            ? "Newest ↓"
+            : "Oldest ↑";
 
           browseSortOrder.addEventListener("click", async () => {
             currentBrowseSort = (currentBrowseSort === "desc") ? "asc" : "desc";
@@ -3504,6 +3619,7 @@ Major UI Systems
             browseSortOrder.textContent = currentBrowseSort === "desc"
               ? "Newest ↓"
               : "Oldest ↑";
+            try { localStorage.setItem(BROWSE_SORT_KEY, currentBrowseSort); } catch (e) { }
 
             browseOffset = 0;
 
@@ -3519,7 +3635,16 @@ Major UI Systems
 
         if (searchSortOrder) {
           searchSortOrder.dataset.sort = "desc";
-          searchSortOrder.textContent = "Newest ↓";
+          try {
+            const savedSearchSort = localStorage.getItem(SEARCH_SORT_KEY);
+            if (savedSearchSort === "asc" || savedSearchSort === "desc") {
+              searchSortOrder.dataset.sort = savedSearchSort;
+            }
+          } catch (e) { }
+
+          searchSortOrder.textContent = searchSortOrder.dataset.sort === "desc"
+            ? "Newest ↓"
+            : "Oldest ↑";
 
           searchSortOrder.addEventListener("click", async () => {
             const currentSort = searchSortOrder.dataset.sort === "asc" ? "asc" : "desc";
@@ -3529,6 +3654,7 @@ Major UI Systems
             searchSortOrder.textContent = nextSort === "desc"
               ? "Newest ↓"
               : "Oldest ↑";
+            try { localStorage.setItem(SEARCH_SORT_KEY, nextSort); } catch (e) { }
 
             searchOffset = 0;
 

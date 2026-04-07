@@ -219,6 +219,45 @@ def parse_vtt_segments(vtt_text: str) -> list[dict]:
 
     return segments
 
+def ms_to_vtt_timestamp(ms: int) -> str:
+    total_ms = max(0, int(ms))
+    hours = total_ms // 3_600_000
+    minutes = (total_ms % 3_600_000) // 60_000
+    seconds = (total_ms % 60_000) // 1000
+    millis = total_ms % 1000
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
+
+
+def ms_to_srt_timestamp(ms: int) -> str:
+    return ms_to_vtt_timestamp(ms).replace(".", ",")
+
+
+def write_vtt_segments(vtt_path: Path, segments: list[dict]) -> None:
+    with open(vtt_path, "w", encoding="utf-8") as f:
+        f.write("WEBVTT\n\n")
+        for seg in segments:
+            f.write(f"{ms_to_vtt_timestamp(seg['start_ms'])} --> {ms_to_vtt_timestamp(seg['end_ms'])}\n")
+            f.write(f"{(seg.get('text') or '').strip()}\n\n")
+
+
+def write_srt_segments(srt_path: Path, segments: list[dict]) -> None:
+    with open(srt_path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segments, start=1):
+            f.write(f"{i}\n")
+            f.write(f"{ms_to_srt_timestamp(seg['start_ms'])} --> {ms_to_srt_timestamp(seg['end_ms'])}\n")
+            f.write(f"{(seg.get('text') or '').strip()}\n\n")
+
+
+def write_txt_from_segments(txt_path: Path, segments: list[dict]) -> None:
+    text = "\n".join((seg.get("text") or "").strip() for seg in segments if (seg.get("text") or "").strip())
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+def sanitize_segment_text(text: str, max_len: int = 300) -> str:
+    cleaned = " ".join(str(text or "").replace("\r", " ").replace("\n", " ").split()).strip()
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip()
+    return cleaned
 
 def build_file_doc(audio_path: Path, txt_path: Path) -> dict:
     filename = audio_path.name
@@ -1045,6 +1084,98 @@ def delete():
         return jsonify(response), 502
 
     return jsonify(response), 200
+
+@app.post("/edit-segment")
+def edit_segment():
+    data = request.get_json(silent=True) or {}
+
+    filename = sanitize_filename(data.get("filename", ""))
+    start_sec = data.get("startSec")
+    new_text = sanitize_segment_text(data.get("text", ""))
+
+    if not filename:
+        return jsonify({"error": "missing filename"}), 400
+
+    try:
+        start_ms = int(round(float(start_sec) * 1000))
+    except Exception:
+        return jsonify({"error": "invalid startSec"}), 400
+
+    if not new_text:
+        return jsonify({"error": "empty text"}), 400
+
+    base = Path(filename).stem
+    audio_path = Path(PROCESSED_DIR) / filename
+    vtt_path = Path(PROCESSED_DIR) / f"{base}.vtt"
+    srt_path = Path(PROCESSED_DIR) / f"{base}.srt"
+    txt_path = Path(PROCESSED_DIR) / f"{base}.txt"
+
+    if not vtt_path.exists():
+        return jsonify({"error": f"missing transcript: {vtt_path.name}"}), 404
+
+    try:
+        vtt_text = vtt_path.read_text(encoding="utf-8")
+        segments = parse_vtt_segments(vtt_text)
+
+        target_idx = None
+        for i, seg in enumerate(segments):
+            if int(seg.get("start_ms", -1)) == start_ms:
+                target_idx = i
+                break
+
+        if target_idx is None:
+            return jsonify({"error": "segment not found"}), 404
+
+        segments[target_idx]["text"] = new_text
+
+        write_vtt_segments(vtt_path, segments)
+        write_srt_segments(srt_path, segments)
+        write_txt_from_segments(txt_path, segments)
+
+        meili = {"updated": False}
+
+        if MEILI_MASTER_KEY and audio_path.exists():
+            try:
+                file_doc = build_file_doc(audio_path, txt_path)
+                segment_docs = build_segment_docs(audio_path, vtt_path)
+
+                r1 = requests.post(
+                    f"{MEILI_URL}/indexes/{INDEX_TRANSCRIPTS}/documents",
+                    headers={**meili_headers(), "Content-Type": "application/json"},
+                    json=[file_doc],
+                    timeout=10,
+                )
+                r1.raise_for_status()
+
+                r2 = requests.post(
+                    f"{MEILI_URL}/indexes/{INDEX_SEGMENTS}/documents",
+                    headers={**meili_headers(), "Content-Type": "application/json"},
+                    json=segment_docs,
+                    timeout=10,
+                )
+                r2.raise_for_status()
+
+                meili = {
+                    "updated": True,
+                    "transcripts": r1.json() if r1.content else {},
+                    "segments": r2.json() if r2.content else {},
+                }
+            except Exception as e:
+                meili = {
+                    "updated": False,
+                    "error": str(e),
+                }
+
+        return jsonify({
+            "ok": True,
+            "filename": filename,
+            "startSec": start_ms / 1000.0,
+            "text": new_text,
+            "meili": meili,
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.post("/clip")
 def clip_audio():
