@@ -420,6 +420,8 @@ Major UI Systems
         const nextPage = document.getElementById("nextPage");
         const browseSortOrder = document.getElementById("browseSortOrder");
         const indexHealthBox = document.getElementById("indexHealthBox");
+        const SEARCH_SORT_KEY = "strixnote_search_sort_order";
+        const BROWSE_SORT_KEY = "strixnote_browse_sort_order";
 
         function setActiveTab(tabName) {
           tabSearch?.classList.toggle("active", tabName === "search");
@@ -3495,8 +3497,16 @@ Major UI Systems
 
         if (browseSortOrder) {
           let currentBrowseSort = "desc";
+          try {
+            const savedBrowseSort = localStorage.getItem(BROWSE_SORT_KEY);
+            if (savedBrowseSort === "asc" || savedBrowseSort === "desc") {
+              currentBrowseSort = savedBrowseSort;
+            }
+          } catch (e) { }
 
-          browseSortOrder.textContent = "Newest ↓";
+          browseSortOrder.textContent = currentBrowseSort === "desc"
+            ? "Newest ↓"
+            : "Oldest ↑";
 
           browseSortOrder.addEventListener("click", async () => {
             currentBrowseSort = (currentBrowseSort === "desc") ? "asc" : "desc";
@@ -3504,6 +3514,7 @@ Major UI Systems
             browseSortOrder.textContent = currentBrowseSort === "desc"
               ? "Newest ↓"
               : "Oldest ↑";
+            try { localStorage.setItem(BROWSE_SORT_KEY, currentBrowseSort); } catch (e) { }
 
             browseOffset = 0;
 
@@ -3519,7 +3530,16 @@ Major UI Systems
 
         if (searchSortOrder) {
           searchSortOrder.dataset.sort = "desc";
-          searchSortOrder.textContent = "Newest ↓";
+          try {
+            const savedSearchSort = localStorage.getItem(SEARCH_SORT_KEY);
+            if (savedSearchSort === "asc" || savedSearchSort === "desc") {
+              searchSortOrder.dataset.sort = savedSearchSort;
+            }
+          } catch (e) { }
+
+          searchSortOrder.textContent = searchSortOrder.dataset.sort === "desc"
+            ? "Newest ↓"
+            : "Oldest ↑";
 
           searchSortOrder.addEventListener("click", async () => {
             const currentSort = searchSortOrder.dataset.sort === "asc" ? "asc" : "desc";
@@ -3529,6 +3549,7 @@ Major UI Systems
             searchSortOrder.textContent = nextSort === "desc"
               ? "Newest ↓"
               : "Oldest ↑";
+            try { localStorage.setItem(SEARCH_SORT_KEY, nextSort); } catch (e) { }
 
             searchOffset = 0;
 
