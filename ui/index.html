@@ -344,21 +344,15 @@ Major UI Systems
       <div id="playerHomeAnchor"></div>
 
       <div id="browseSortBar" class="row" style="display:none; gap:10px; align-items:center; margin-top:10px;">
-        <div class="small muted">Sort</div>
-        <select id="browseSortOrder" title="Sort browse files by date"
-          style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
-          <option value="desc">Newest first</option>
-          <option value="asc">Oldest first</option>
-        </select>
+        <button id="browseSortOrder" class="btn btn-secondary" type="button" style="height:38px; min-width:140px;">
+          Newest ↓
+        </button>
       </div>
 
       <div id="searchSortBar" class="row" style="display:none; gap:10px; align-items:center; margin-top:10px;">
-        <div class="small muted">Sort</div>
-        <select id="searchSortOrder" title="Sort search file results by date"
-          style="max-width:160px; height:38px; padding:6px 10px; box-sizing:border-box;">
-          <option value="desc">Newest first</option>
-          <option value="asc">Oldest first</option>
-        </select>
+        <button id="searchSortOrder" class="btn btn-secondary" type="button" style="height:38px; min-width:140px;">
+          Newest ↓
+        </button>
       </div>
 
       <div id="searchStatus" class="small muted" style="margin:8px 2px 6px 2px;"></div>
@@ -2722,13 +2716,9 @@ Major UI Systems
             limit: requestLimit,
             offset: requestOffset,
             filter: filter || undefined,
-            sort: isFilename
-              ? [`created_at:${searchSortOrder?.value || "desc"}`]
-              : (isFiles
-                ? (segmentOrderMode === "position"
-                  ? ["created_at:desc"]
-                  : undefined)
-                : undefined),
+            sort: (isFiles || isFilename)
+              ? [`created_at:${searchSortOrder?.dataset?.sort || "desc"}`]
+              : undefined,
             attributesToHighlight: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             attributesToCrop: [(isFiles || isFilename) ? (isFilename ? "filename" : "text") : "text"],
             cropLength: 60,
@@ -2797,7 +2787,7 @@ Major UI Systems
             const end = Math.min(searchOffset + (data.hits?.length || 0), total);
 
             if (isFiles || isFilename) {
-              const sortLabel = (searchSortOrder?.value || "desc") === "asc" ? "oldest first" : "newest first";
+              const sortLabel = (searchSortOrder?.dataset?.sort || "desc") === "asc" ? "oldest first" : "newest first";
               searchStatus.textContent = isFilename
                 ? `File name results: ${total} • Showing ${start}-${end} • Sorted: ${sortLabel}`
                 : `Files results: ${total} • Showing ${start}-${end} • Sorted: ${sortLabel}`;
@@ -3504,19 +3494,47 @@ Major UI Systems
         };
 
         if (browseSortOrder) {
-          browseSortOrder.addEventListener("change", async () => {
-            if (mode !== "browse") return;
+          let currentBrowseSort = "desc";
+
+          browseSortOrder.textContent = "Newest ↓";
+
+          browseSortOrder.addEventListener("click", async () => {
+            currentBrowseSort = (currentBrowseSort === "desc") ? "asc" : "desc";
+
+            browseSortOrder.textContent = currentBrowseSort === "desc"
+              ? "Newest ↓"
+              : "Oldest ↑";
+
             browseOffset = 0;
-            await tabBrowse.onclick();
+
+            if (mode === "browse") {
+              await tabBrowse.onclick();
+            }
+          });
+
+          Object.defineProperty(browseSortOrder, "value", {
+            get() { return currentBrowseSort; }
           });
         }
 
         if (searchSortOrder) {
-          searchSortOrder.addEventListener("change", async () => {
-            if (mode !== "search") return;
-            if (searchModeValue !== "files") return;
+          searchSortOrder.dataset.sort = "desc";
+          searchSortOrder.textContent = "Newest ↓";
+
+          searchSortOrder.addEventListener("click", async () => {
+            const currentSort = searchSortOrder.dataset.sort === "asc" ? "asc" : "desc";
+            const nextSort = currentSort === "desc" ? "asc" : "desc";
+
+            searchSortOrder.dataset.sort = nextSort;
+            searchSortOrder.textContent = nextSort === "desc"
+              ? "Newest ↓"
+              : "Oldest ↑";
+
             searchOffset = 0;
-            await runSearchFromUi(searchQuery || "", { clearDates: false });
+
+            if (mode === "search" && searchModeValue === "files") {
+              await runSearchFromUi(searchQuery || "", { clearDates: false });
+            }
           });
         }
 

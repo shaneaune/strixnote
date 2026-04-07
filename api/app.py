@@ -906,14 +906,13 @@ def delete():
         return jsonify({"error": "missing filename"}), 400
 
     # Delete from disk
-    # Delete from disk
     base = Path(filename).stem
     paths = [
         Path(INCOMING_DIR) / filename,
         Path(INCOMING_DIR) / ".processing" / filename,
         Path(PROCESSED_DIR) / filename,
         Path(PROCESSED_DIR) / f"{base}.txt",
-        Path(PROCESSED_DIR) / f"{base}.srt",
+        Path(PROCESSED_DIR) / f"{base}.srt", 
         Path(PROCESSED_DIR) / f"{base}.vtt",
         Path(PROCESSED_DIR) / f"{base}.words.json",
         progress_path_for(filename),
