@@ -1740,7 +1740,7 @@ Major UI Systems
               // Only allow editing in Whisper default mode
               const currentSegMode = transcriptSegmentationModeValue || "whisper";
               if (currentSegMode !== "whisper") {
-                alert("Editing is only available in Whisper default segmentation mode.");
+                alert("Editing is only available in Whisper default segmentation mode. Mode can be changed in settings.");
                 return;
               }
 
@@ -1751,6 +1751,7 @@ Major UI Systems
               const originalText = seg.text || "";
               const textarea = document.createElement("textarea");
               textarea.value = originalText;
+              textarea.maxLength = 300;
               textarea.style.flex = "1";
               textarea.style.minWidth = "0";
               textarea.style.fontFamily = "inherit";
@@ -1769,6 +1770,10 @@ Major UI Systems
               if (!textarea) return;
 
               const newText = textarea.value.trim();
+              if (newText.length > 300) {
+                alert("Segment text must be 300 characters or fewer.");
+                return;
+              }
               if (!newText) return;
 
               save.style.pointerEvents = "none";
