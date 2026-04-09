@@ -2,44 +2,48 @@
 ===============================================================================
 StrixNote Web UI (index.html)
 
-Primary Responsibilities
+Purpose
 -------------------------------------------------------------------------------
-- Upload audio files to the backend
-- Browse previously processed transcripts
-- Search Meilisearch indexes (files or individual transcript segments)
-- Control the audio player and caption display
-- Render transcripts from TXT or VTT files
-- Manage UI state (tabs, sorting, pagination, pinned files)
-- Export transcript text (plain or timestamped)
+This file contains the main browser UI for StrixNote. It handles:
+- uploading audio files
+- browsing processed files
+- searching file and segment indexes
+- controlling audio playback and captions
+- rendering transcripts in Whisper or post-processed view
+- editing transcript segments (Whisper mode only)
+- clip creation / reimport
+- bookmarks, pinned files, sorting, and pagination
+- loading and saving UI/runtime settings
 
-Architecture Overview
+How the UI fits into the system
 -------------------------------------------------------------------------------
-Backend services exposed through API endpoints:
+The browser UI talks to the backend API for all file, settings, and indexing
+operations. Audio and transcript assets are served as static files.
 
-/api/upload           Upload audio files
-/api/status           Processing status polling
-/api/delete           Delete audio + transcript files
-/api/settings         Load/save runtime configuration
-/api/reindex          Rebuild search indexes
-/api/meili/search     Proxy to Meilisearch
+Main API routes used here:
+- /api/upload            Upload audio files
+- /api/status            Poll processing state
+- /api/delete            Delete audio + transcript sidecar files
+- /api/settings          Load/save runtime settings
+- /api/reindex           Rebuild search indexes
+- /api/edit-segment      Save a manual transcript correction
+- /api/clip              Export or re-import selected transcript clips
+- /api/meili/search      Proxy search requests to Meilisearch
 
-Static transcript assets served from:
+Static assets used here:
+- /audio/<file>          Audio playback source
+- /audio/<file>.txt      Plain transcript
+- /audio/<file>.vtt      Subtitle transcript
+- /audio/<file>.words.json  Word timing data when available
 
-/audio/<file>         Audio playback
-/audio/<file>.txt     Plain transcript
-/audio/<file>.vtt     Whisper subtitle output
-
-Major UI Systems
+Important notes
 -------------------------------------------------------------------------------
-1. Upload system
-2. Search interface (segments/files)
-3. Browse interface (file listing)
-4. Audio player with captions
-5. Transcript viewer and export
-6. Settings editor
-7. Theme toggle
-8. Pagination + sorting
-9. LocalStorage persistence (search mode, theme, pinned files)
+- "Whisper default" transcript mode shows the raw saved transcript segments.
+- "Post-processed" mode reflows transcript text for easier reading.
+- Segment editing is intentionally limited to Whisper mode so edits always map
+  back to a real saved transcript segment.
+- Search and browse state is partly persisted in localStorage so the UI keeps
+  useful defaults between reloads.
 ===============================================================================
 -->
 
@@ -121,6 +125,14 @@ Major UI Systems
         <div class="tab" id="tabSettings">Settings</div>
       </div>
 
+      <!--
+Search controls:
+- Search mode chooses between segment text, full-file text, or file name search.
+- Date filters can use uploaded date or recorded date.
+- Recorded date comes from file metadata when available, otherwise falls back
+  to supported filename parsing or file modified time.
+-->
+
       <div id="searchWrap" style="display:flex; flex-direction:column; gap:10px;">
 
         <!-- Row 1: mode + date -->
@@ -173,6 +185,16 @@ Major UI Systems
         </div>
         <div id="bookmarksList"></div>
       </div>
+
+      <!--
+Settings are split into two groups:
+1) Transcription defaults for newly uploaded files
+2) Search / browse behavior that affects the UI immediately
+
+Changing settings here does not rewrite old transcripts unless a feature
+explicitly re-renders or reindexes them.
+-->
+
       <div id="settingsWrap" class="panel" style="display:none; margin-top:10px;">
         <div style="font-weight:600; margin-bottom:10px;">Settings</div>
         <div class="small muted" style="margin:-4px 0 12px; opacity:0.85;">
@@ -375,8 +397,11 @@ Major UI Systems
       <script>
 
         // ============================================================================
-        // Configuration and Global DOM References
-        // Loads Meilisearch config and caches commonly used UI elements
+        // Configuration and Shared DOM References
+        // This section loads runtime config from config.js and caches the main DOM
+        // elements used throughout the UI. Keeping these references together avoids
+        // repeated document.getElementById(...) calls and makes later sections easier
+        // to read.
         // ============================================================================
 
         const MEILI = window.APP_CONFIG.MEILI_URL;
@@ -423,12 +448,18 @@ Major UI Systems
         const SEARCH_SORT_KEY = "strixnote_search_sort_order";
         const BROWSE_SORT_KEY = "strixnote_browse_sort_order";
 
+        // Updates tab button styling only. This does not change the visible page
+        // content by itself; setMode(...) handles the actual panel visibility.        
+
         function setActiveTab(tabName) {
           tabSearch?.classList.toggle("active", tabName === "search");
           tabBrowse?.classList.toggle("active", tabName === "browse");
           tabBookmarks?.classList.toggle("active", tabName === "bookmarks");
           tabSettings?.classList.toggle("active", tabName === "settings");
         }
+
+        // Reads transcript post-processing values from the Settings form and returns
+        // them in the same shape used by the backend settings API.
 
         function readTranscriptPostprocessFromForm() {
           return {
@@ -448,6 +479,10 @@ Major UI Systems
             pause_threshold: Number(setPauseThreshold?.value || TRANSCRIPT_DEFAULTS.pauseThreshold) || TRANSCRIPT_DEFAULTS.pauseThreshold
           };
         }
+
+        // Central UI mode switcher.
+        // This controls which major panel is visible (Browse, Search, Settings, etc.)
+        // and also resets mode-specific UI state when moving between pages.
 
         function setMode(nextMode) {
           mode = nextMode;
@@ -540,6 +575,10 @@ Major UI Systems
         let pauseSplitEnabledValue = TRANSCRIPT_DEFAULTS.pauseSplit;
         let pauseThresholdValue = TRANSCRIPT_DEFAULTS.pauseThreshold;
 
+        // Applies saved transcript post-processing settings to the in-memory values
+        // used by transcript rendering. These values are read later when transcripts
+        // are displayed in post-processed mode.
+
         function applyTranscriptPostprocess(tp) {
           transcriptPunctuationValue = (tp?.punctuation ?? "");
           transcriptIgnoreValue = Array.isArray(tp?.ignore_abbreviations) ? tp.ignore_abbreviations : [];
@@ -548,6 +587,9 @@ Major UI Systems
           pauseSplitEnabledValue = !!tp?.pause_split_enabled;
           pauseThresholdValue = Number(tp?.pause_threshold ?? TRANSCRIPT_DEFAULTS.pauseThreshold) || TRANSCRIPT_DEFAULTS.pauseThreshold;
         }
+
+        // Builds the transcript post-processing payload from the current Settings UI.
+        // This is used when saving settings back to the backend.
 
         function buildTranscriptPostprocessFromUI() {
           return {
@@ -578,6 +620,10 @@ Major UI Systems
         const reindexStatus = document.getElementById("reindexStatus");
         const reindexProgressWrap = document.getElementById("reindexProgressWrap");
         const reindexProgressBar = document.getElementById("reindexProgressBar");
+
+        // Loads current MeiliSearch / index health information for the Settings page.
+        // This is used as a quick diagnostic view and to warn when a reindex may be
+        // needed because processed files and indexed files are out of sync.
 
         async function loadIndexHealth() {
           if (!indexHealthBox) return;
@@ -632,6 +678,9 @@ Major UI Systems
           }
         }
 
+        // Loads current backend settings and pushes them into the Settings form.
+        // This also updates the local runtime values used immediately by the UI.
+
         async function loadSettingsIntoForm() {
           if (settingsStatus) settingsStatus.textContent = "Loading...";
           const r = await fetch("/api/settings");
@@ -663,6 +712,9 @@ Major UI Systems
           if (setMeiliSynonyms) setMeiliSynonyms.value = JSON.stringify(m.synonyms || {}, null, 2);
           if (settingsStatus) settingsStatus.textContent = "Loaded.";
         }
+
+        // Saves the current Settings form to the backend, then updates local runtime
+        // state so the UI immediately reflects the saved values where appropriate.
 
         async function saveSettingsFromForm() {
 
@@ -733,6 +785,10 @@ Major UI Systems
           if (settingsStatus) settingsStatus.textContent = "Saved.";
           return data.settings;
         }
+
+        // Shared UI state.
+        // These variables track the active page, current search, current playback
+        // target, transcript mode, pending browse actions, and pagination state.
 
         let mode = "search";
         let browseOffset = 0;
@@ -805,6 +861,9 @@ Major UI Systems
           currentTimelineFilename = "";
         }
 
+        // Bookmarks are stored in localStorage only.
+        // They are a browser-side convenience feature and are not sent to the backend.
+
         const BOOKMARKS_KEY = "strixnote_bookmarks";
 
         function getBookmarks() {
@@ -872,6 +931,10 @@ Major UI Systems
           saveBookmarks(list);
         }
 
+        // Renders the Bookmarks tab from localStorage data.
+        // File bookmarks reopen the file in Browse mode.
+        // Segment bookmarks reopen the file and jump to the bookmarked segment.
+
         function renderBookmarks() {
           const list = getBookmarks();
 
@@ -909,6 +972,9 @@ Major UI Systems
                     </div>
                 </div>
               `;
+
+              // Reopen the bookmarked file by switching to Browse mode and
+              // jumping to the page that contains that file.
 
               const btn = div.querySelector(".btn-open-file");
               if (btn) {
@@ -952,6 +1018,9 @@ Major UI Systems
                 </div>
               `;
 
+              // Reopen the bookmarked segment by switching to Browse mode and
+              // asking Browse to open the correct file and transcript location.
+
               const btn = div.querySelector(".btn-open-seg");
               if (btn) {
                 btn.onclick = async () => {
@@ -982,12 +1051,19 @@ Major UI Systems
           });
         }
 
+        // Restore the last search mode used by this browser so Search opens in a
+        // familiar state after a page reload.        
+
         try {
           const saved = localStorage.getItem(SEARCH_MODE_KEY);
           if (saved === "segments" || saved === "files" || saved === "filename") searchModeValue = saved;
         } catch (e) { }
 
         const segmentOrder = document.getElementById("segmentOrder");
+
+        // The segment order control is used for both segment search and file search.
+        // In file search it controls whether results behave like "most relevant" or
+        // "first occurrence" style ordering.
 
         const updateSegmentOrderVisibility = () => {
           if (!segmentOrder) return;
@@ -997,6 +1073,10 @@ Major UI Systems
         };
 
         updateSegmentOrderVisibility();
+
+        // Changing search mode updates the saved local preference, resets paging,
+        // updates the order control visibility, and re-runs the search if a query
+        // is already active.
 
         searchMode.addEventListener("change", async () => {
           const v = searchMode.value;
@@ -1043,6 +1123,8 @@ Major UI Systems
           return `${yy}/${mm}/${dd}`;
         }
 
+        // Parses VTT-style timestamps into seconds for transcript and subtitle use.
+
         function vttTimeToSeconds(t) {
           // "HH:MM:SS.mmm" or "MM:SS.mmm"
           const parts = t.trim().split(":");
@@ -1067,6 +1149,9 @@ Major UI Systems
           const r = s % 60;
           return [h, m, r].map(v => String(v).padStart(2, "0")).join(":");
         }
+
+        // Converts a VTT file into a simple plain-text transcript with timestamps.
+        // Used for the "timestamped text" download/export view.
 
         function vttToTimestampedText(vtt) {
           // Returns lines like: "00:12:34  some text"
@@ -1101,6 +1186,10 @@ Major UI Systems
 
           return out.join("\n");
         }
+
+        // Parses a VTT transcript into basic segment objects used by the UI.
+        // This is the starting point for both Whisper-default rendering and
+        // post-processed transcript rendering.
 
         function parseVttSegmentsForTranscript(vtt) {
           const lines = String(vtt || "").replace(/\r/g, "").split("\n");
@@ -1142,7 +1231,7 @@ Major UI Systems
 
         // normalizeTranscriptSegments:
         // - merges Whisper segments into display segments
-        // - optionally splits on pauses (pauseMs threshold)
+        // - optionally splits on pauses using word timing gaps when available
         // - optionally splits on sentence punctuation
         // - avoids splitting common abbreviations (e.g., "Mr.", "Dr.")
         // - enforces max segment duration limits
@@ -1159,6 +1248,10 @@ Major UI Systems
           const ignoreAbbreviations = transcriptIgnoreValue;
           let hardMaxSec = Number(transcriptMaxSecValue);
           if (!Number.isFinite(hardMaxSec)) hardMaxSec = TRANSCRIPT_DEFAULTS.maxSec;
+
+          // If word timing data is available, this can split a Whisper segment
+          // into smaller pieces wherever a large enough pause is detected.
+          // This is only used when pause-aware splitting is enabled.
 
           const splitByWordGaps = (seg) => {
             if (!pauseSplitEnabledValue || !Array.isArray(seg.words) || seg.words.length < 2) {
@@ -1201,6 +1294,10 @@ Major UI Systems
             });
           };
 
+          // Splits only fully completed sentences from the front of the text.
+          // Any unfinished tail is returned as "remaining" so later segments can
+          // continue building it without forcing a premature sentence break.
+
           const splitCompletedSentences = (text) => {
             let remaining = String(text || "").trim();
             const complete = [];
@@ -1239,6 +1336,11 @@ Major UI Systems
 
             return { complete, remaining };
           };
+
+          // Emits one or more display segments from completed sentence text.
+          // This keeps sentence order, estimates timestamps for each sentence,
+          // and further splits long sentences so no displayed segment exceeds
+          // the configured max segment duration.
 
           const emitSentences = (startSec, endSec, sentences, parts = null, hasRemaining = false) => {
             if (!sentences.length) return startSec;
@@ -1364,6 +1466,10 @@ Major UI Systems
             return cursor;
           };
 
+          // Walk through the raw Whisper segments and build the final displayed
+          // transcript segments. Depending on settings, this may merge segments,
+          // split on pauses, split on punctuation, or split long text chunks.          
+
           for (const seg of rawSegments) {
             const splitWordSegments = splitByWordGaps(seg);
             const segmentsToProcess = splitWordSegments || [seg];
@@ -1382,7 +1488,11 @@ Major UI Systems
                   parts: [{ startSec, endSec, text }],
                 };
               } else {
+
+                // Handle pause-based splitting before merging segments.
+                // This ensures natural breaks are respected in the transcript.
                 // Pause-aware split must happen BEFORE merging the new segment
+
                 if (pauseSplitEnabledValue && current.endSec != null) {
                   const gap = startSec - current.endSec;
                   if (gap >= pauseThresholdValue) {
@@ -1414,6 +1524,9 @@ Major UI Systems
                 current.parts = [...(current.parts || []), { startSec, endSec, text }];
               }
 
+              // After merging text, attempt to extract completed sentences
+              // and emit them as finalized display segments.
+
               const split = splitCompletedSentences(current.text);
 
               if (split.complete.length) {
@@ -1430,6 +1543,10 @@ Major UI Systems
                   current = null;
                 }
               } else {
+
+                // If the accumulated segment becomes too long, split it into
+                // smaller chunks based on the configured maximum duration.
+
                 const duration = current.endSec - current.startSec;
                 if (duration >= hardMaxSec) {
                   const words = String(current.text || "").trim().split(/\s+/).filter(Boolean);
@@ -1460,6 +1577,8 @@ Major UI Systems
             }
           }
 
+          // Flush any remaining accumulated segment after processing all inputs.
+
           if (current) {
             out.push({
               startSec: current.startSec,
@@ -1472,11 +1591,16 @@ Major UI Systems
           return out;
         }
 
+        // Fetches the VTT transcript file used for subtitles and transcript rendering.
+
         async function fetchTranscriptVtt(base) {
           const r = await fetch("/audio/" + encodeURIComponent(base + ".vtt"));
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return await r.text();
         }
+
+        // Fetches word-level timing data for a transcript.
+        // This file is optional and may not exist for all audio files.
 
         async function fetchTranscriptWords(base) {
           const r = await fetch("/audio/" + encodeURIComponent(base + ".words.json"));
@@ -1484,6 +1608,9 @@ Major UI Systems
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return await r.json();
         }
+
+        // Attaches word-level timing data (if available) to each segment.
+        // This enables pause-aware splitting and more precise transcript processing.
 
         function attachWordsToSegments(rawSegments, wordsPayload) {
           if (!Array.isArray(rawSegments) || !rawSegments.length) return [];
@@ -1516,6 +1643,9 @@ Major UI Systems
             };
           });
         }
+
+        // Renders clickable markers on the playback timeline for each segment.
+        // Allows quick navigation to segment start positions.
 
         function renderSegmentTimeline(segments, filename) {
 
@@ -1557,6 +1687,9 @@ Major UI Systems
           });
         }
 
+        // Renders transcript segments into interactive rows.
+        // Handles selection, playback, editing, copying, clipping, and bookmarking.
+
         function renderTranscriptSegments(transcriptBox, segments, filename, selectedClipSegments, refreshClipActions, segmentationMode = "whisper") {
           transcriptBox.innerHTML = "";
           transcriptBox.focus();
@@ -1564,6 +1697,8 @@ Major UI Systems
           let selectedIndex = -1;
           const rows = [];
           const hostRow = transcriptBox.closest(".result");
+
+          // Manages which transcript row is currently selected and ensures it stays visible.
 
           function selectRow(i) {
             if (rows[selectedIndex]) rows[selectedIndex].classList.remove("selected");
@@ -1573,6 +1708,11 @@ Major UI Systems
               rows[selectedIndex].scrollIntoView({ block: "center", behavior: "smooth" });
             }
           }
+
+          // Keyboard navigation for transcript:
+          // - Arrow keys move selection
+          // - Enter plays selected segment
+          // - Space is intentionally blocked to avoid accidental playback conflicts
 
           transcriptBox.onkeydown = (e) => {
             if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT")) {
@@ -1607,6 +1747,9 @@ Major UI Systems
             }
           };
 
+          // Global safeguard to prevent the spacebar from triggering unintended playback
+          // when the transcript is focused but not actively editing text.
+
           if (!window.__strixTranscriptSpaceBlocker) {
             window.__strixTranscriptSpaceBlocker = true;
 
@@ -1623,6 +1766,9 @@ Major UI Systems
               }
             });
           }
+
+          // Highlights the corresponding timeline marker when hovering transcript rows.
+          // Uses the floored start time so markers and rows stay aligned.
 
           const setTimelineHover = (startSec) => {
             document.querySelectorAll(".timelineMarker.hover").forEach(m => {
@@ -1653,6 +1799,9 @@ Major UI Systems
             });
 
             row.style.cursor = "pointer";
+
+            // Clicking a row selects it, focuses the transcript, and starts playback
+            // from the segment's start time.
 
             row.addEventListener("click", (e) => {
               e.stopPropagation();
@@ -1691,6 +1840,9 @@ Major UI Systems
             copy.style.marginLeft = "auto";
             copy.style.marginRight = "8px";
 
+            // Copies the current segment (timestamp + text) to the clipboard.
+            // Falls back to a textarea method if Clipboard API is unavailable.
+
             copy.addEventListener("click", async (e) => {
               e.stopPropagation();
 
@@ -1728,6 +1880,9 @@ Major UI Systems
             save.style.marginRight = "8px";
             save.style.display = "none";
 
+            // Enter edit mode for a segment.
+            // Editing is restricted to Whisper mode so edits map directly to stored segments.
+
             edit.addEventListener("click", (e) => {
               e.stopPropagation();
 
@@ -1756,6 +1911,9 @@ Major UI Systems
               edit.style.display = "none";
               save.style.display = "";
             });
+
+            // Save handler sends the edited segment text to the backend and updates
+            // the local UI only if the save succeeds.
 
             save.addEventListener("click", async (e) => {
               e.stopPropagation();
@@ -1791,6 +1949,9 @@ Major UI Systems
 
                 seg.text = newText;
 
+                // Replace the textarea with updated text after a successful save.
+                // This keeps the DOM consistent without re-rendering the entire transcript.                
+
                 const newTextEl = document.createElement("span");
                 newTextEl.className = "transcriptText";
                 newTextEl.textContent = newText;
@@ -1819,6 +1980,9 @@ Major UI Systems
             row.appendChild(copy);
             row.appendChild(edit);
             row.appendChild(save);
+
+            // Generates a stable key for clip selection.
+            // This ensures segments remain uniquely identifiable even if UI state changes.
 
             const getClipSegmentKey = (seg) => {
               const startSec = Number(seg.startSec);
@@ -1894,6 +2058,9 @@ Major UI Systems
           });
         }
 
+        // Fetches transcript text from the server.
+        // Can return plain text or timestamped text depending on mode.
+
         async function fetchTranscriptText(base, wantTs, emptyFallback = "") {
           if (!wantTs) {
             const r = await fetch("/audio/" + encodeURIComponent(base + ".txt"));
@@ -1908,6 +2075,8 @@ Major UI Systems
           return vttToTimestampedText(vtt) || emptyFallback;
         }
 
+        // Converts transcript segments into plain text, optionally including timestamps.
+
         function transcriptSegmentsToText(segments, wantTs) {
           const list = Array.isArray(segments) ? segments : [];
           if (!list.length) return "";
@@ -1920,6 +2089,9 @@ Major UI Systems
             .map(seg => `${seg.startLabel}  ${String(seg?.text || "").trim()}`)
             .join("\n");
         }
+
+        // Downloads transcript content as a file by generating a temporary
+        // blob URL and triggering a browser download.
 
         async function downloadTranscriptFile(base, wantTs, processedSegments = null) {
           let text = "";
@@ -1947,6 +2119,9 @@ Major UI Systems
           }, 100);
         }
 
+        // Handles transcript download requests, including fallback logic
+        // when processed segments are already available in memory.
+
         async function handleTranscriptDownload({ div, filename, tsToggle }) {
           const base = getBaseNameSafe(filename);
           const wantTs = !(tsToggle && tsToggle.checked);
@@ -1969,6 +2144,9 @@ Major UI Systems
           }
         }
 
+        // Loads and processes transcript segments using the current
+        // segmentation mode (Whisper default or post-processed).
+
         async function getRenderedTranscriptSegments(base) {
           const vtt = await fetchTranscriptVtt(base);
           let rawSegments = parseVttSegmentsForTranscript(vtt);
@@ -1988,9 +2166,14 @@ Major UI Systems
             : rawSegments;
         }
 
+        // Retrieves plain (non-timestamped) transcript text for display.
+
         async function getPlainTranscriptText(base) {
           return await fetchTranscriptText(base, false, "(empty)");
         }
+
+        // Applies rendered transcript segments to the UI and updates
+        // the timeline and transcript display together.
 
         function applyRenderedTranscriptToUI({
           segments,
@@ -2016,6 +2199,9 @@ Major UI Systems
           );
         }
 
+        // Wires all interactive controls for a transcript panel:
+        // playback, search navigation, clipping, downloading, and UI state.
+
         function wireTranscriptControls({
           div,
           filename,
@@ -2037,9 +2223,14 @@ Major UI Systems
 
           let currentMatchIndex = -1;
 
+          // Returns all highlighted search matches within the transcript.
+
           const getMatchMarks = () => {
             return Array.from(transcriptBox.querySelectorAll(".transcriptText mark"));
           };
+
+          // Focuses a transcript row and starts playback from its position.
+          // Also updates selection highlighting.
 
           const focusMatchRow = (row) => {
             if (!row) return;
@@ -2055,6 +2246,9 @@ Major UI Systems
             placePlayerAboveRow(transcriptBox.closest(".result"));
             playFromSegment(filename, sec);
           };
+
+          // Moves to the next or previous highlighted search match
+          // and scrolls it into view.
 
           const moveMatch = (direction) => {
             const marks = getMatchMarks();
@@ -2073,6 +2267,10 @@ Major UI Systems
           };;
 
           const matchCounterEl = transcriptWrap.querySelector(".matchCounter");
+
+          // Updates match navigation UI:
+          // - shows/hides navigation buttons
+          // - updates match counter display
 
           const updateMatchUi = () => {
             const marks = getMatchMarks();
@@ -2101,12 +2299,20 @@ Major UI Systems
             }
           };
 
+          // Stores currently selected transcript segments for clip creation.
+          // Uses a Map for stable key-based access.
+
           const selectedClipSegments = new Map();
+
+          // Returns selected clip segments sorted by start time.
+          // This ensures clips are processed in playback order.
 
           const getSelectedClipRanges = () => {
             return Array.from(selectedClipSegments.values())
               .sort((a, b) => a.startSec - b.startSec);
           };
+
+          // Updates the clip status message shown in the UI.
 
           const setClipStatus = (message) => {
             const statusEl = div.querySelector(".clipStatus");
@@ -2114,6 +2320,8 @@ Major UI Systems
               statusEl.textContent = message;
             }
           };
+
+          // Handles API errors for clip operations and displays a user-friendly message.
 
           const handleClipError = async (resp, messagePrefix) => {
             if (!resp.ok) {
@@ -2123,6 +2331,9 @@ Major UI Systems
             }
             return false;
           };
+
+          // Sends a clip request to the backend with selected segment ranges.
+          // Mode determines whether this is a download or re-import action.
 
           const postClipRequest = async (mode) => {
             const ranges = getSelectedClipRanges();
@@ -2137,6 +2348,9 @@ Major UI Systems
               })
             });
           };
+
+          // Updates clip action UI (buttons, counts, enabled/disabled state)
+          // based on the current clip selection.
 
           const refreshClipActions = () => {
             const count = selectedClipSegments.size;
@@ -2158,6 +2372,9 @@ Major UI Systems
             }
           };
 
+          // Prevent clicks inside the transcript from bubbling up and triggering
+          // parent row click handlers or collapsing behavior.
+
           transcriptWrap.addEventListener("click", (e) => {
             e.stopPropagation();
           });
@@ -2165,6 +2382,8 @@ Major UI Systems
           transcriptBox.addEventListener("click", (e) => {
             e.stopPropagation();
           });
+
+          // Clears all selected clip segments and resets UI state.
 
           wireOnce(clipClearBtn, (e) => {
             e.stopPropagation();
@@ -2179,6 +2398,8 @@ Major UI Systems
 
             refreshClipActions();
           });
+
+          // Downloads selected clip segments as a new audio file.
 
           wireOnce(clipDownloadBtn, async (e) => {
             e.stopPropagation();
@@ -2202,6 +2423,9 @@ Major UI Systems
             }, 100);
           });
 
+          // Sends selected clip segments back into the system as a new file.
+          // The new file will be processed like any uploaded audio.
+
           wireOnce(clipReimportBtn, async (e) => {
             e.stopPropagation();
 
@@ -2217,6 +2441,8 @@ Major UI Systems
 
           if (prevMatchBtn) prevMatchBtn.style.display = "none";
           if (nextMatchBtn) nextMatchBtn.style.display = "none";
+
+          // Wires match navigation buttons (previous / next result match).
 
           if (prevMatchBtn && !prevMatchBtn.dataset.wired) {
             prevMatchBtn.dataset.wired = "1";
@@ -2234,6 +2460,8 @@ Major UI Systems
             });
           }
 
+          // Collapses the transcript panel and resets its visual state.
+
           const closeWrap = (w) => {
             w.classList.remove("open");
             w.style.maxHeight = "0px";
@@ -2244,6 +2472,9 @@ Major UI Systems
 
             setTimeout(() => { w.style.display = "none"; }, 180);
           };
+
+          // Expands the transcript panel with animation.
+          // Sets initial collapsed state, then animates height and opacity.          
 
           const openWrap = (wrap, button) => {
             wrap.style.display = "block";
@@ -2257,6 +2488,13 @@ Major UI Systems
               wrap.style.maxHeight = wrap.scrollHeight + "px";
             });
           };
+
+          // Main transcript rendering pipeline:
+          // - loads transcript (plain or segmented)
+          // - applies segmentation mode
+          // - renders UI
+          // - applies search highlighting (if applicable)
+          // - updates match navigation UI
 
           const renderTranscript = async () => {
             const base = getBaseNameSafe(filename);
@@ -2315,10 +2553,16 @@ Major UI Systems
             }
           };
 
+          // Re-renders the transcript and adjusts the container height
+          // so the expand/collapse animation remains smooth.
+
           const renderTranscriptAndResize = async () => {
             await renderTranscript();
             transcriptWrap.style.maxHeight = transcriptWrap.scrollHeight + "px";
           };
+
+          // Wires the transcript download button.
+          // Supports both plain text and timestamped export formats.
 
           if (dlBtn && !dlBtn.dataset.wired) {
             dlBtn.dataset.wired = "1";
@@ -2328,12 +2572,20 @@ Major UI Systems
             });
           }
 
+          // Toggle transcript panel visibility for this result.
+          // Ensures only one transcript panel is open at a time.          
+
           textBtn.onclick = async (e) => {
             e.stopPropagation();
 
             document.querySelectorAll("#results .transcriptWrap.open").forEach(w => {
               if (w !== transcriptWrap) closeWrap(w);
             });
+
+            // Helper functions for transcript loading state:
+            // - loading indicator
+            // - error display
+            // - loaded flag tracking
 
             const setTranscriptLoadError = (err) => {
               transcriptBox.textContent = "Failed to load transcript: " + (err?.message || err);
@@ -2346,6 +2598,9 @@ Major UI Systems
             const markTranscriptLoaded = () => {
               transcriptBox.dataset.loaded = "1";
             };
+
+            // Lazy-load the transcript only once when first opened.
+            // Prevents unnecessary re-fetching and re-rendering.
 
             const loadTranscriptIfNeeded = async () => {
               if (transcriptBox.dataset.loaded) return;
@@ -2394,6 +2649,9 @@ Major UI Systems
         // Includes timeout protection and response validation.
         // ============================================================================
 
+        // Sends a request to the backend Meilisearch proxy.
+        // Handles timeouts, JSON parsing, and error normalization.
+
         async function meili(index, body) {
           const url = `/api/meili/search/${encodeURIComponent(index)}`;
 
@@ -2439,6 +2697,9 @@ Major UI Systems
           }
         }
 
+        // Finds the correct Browse pagination offset for a given filename.
+        // This allows the UI to jump directly to the page containing that file.
+
         async function findBrowseOffsetForFilename(filename) {
           if (!filename) return 0;
 
@@ -2479,6 +2740,8 @@ Major UI Systems
           }
         }
 
+        // Formats file size into human-readable units (B, KB, MB, GB).
+
         function formatBytes(bytes) {
           if (bytes == null || isNaN(bytes)) return "";
           const units = ["B", "KB", "MB", "GB"];
@@ -2488,6 +2751,8 @@ Major UI Systems
           const num = i === 0 ? String(Math.round(v)) : v.toFixed(v >= 10 ? 1 : 2);
           return `${num} ${units[i]}`;
         }
+
+        // Formats duration (seconds) into a human-readable time string.
 
         function formatDuration(seconds) {
           if (seconds == null || isNaN(seconds)) return "";
@@ -2499,6 +2764,8 @@ Major UI Systems
           return `${m}:${String(sec).padStart(2, "0")}`;
         }
 
+        // Formats metadata display (duration and file size) for search/browse results.
+
         function formatMeta(hit) {
           const dur = formatDuration(hit.duration_s);
           const size = formatBytes(hit.audio_bytes);
@@ -2507,6 +2774,9 @@ Major UI Systems
           if (size) parts.push(size);
           return parts.length ? ` \u2022 ${parts.join(" \u2022 ")}` : "";
         }
+
+        // Resets the audio player state and clears any loaded media or captions.
+
         function resetPlayer() {
           try { player.pause(); } catch (e) { }
           player.removeAttribute("src");
@@ -2514,6 +2784,9 @@ Major UI Systems
           player.load();
           captionBox.textContent = "";
         }
+
+        // Handles live caption updates and active segment highlighting
+        // during audio playback.
 
         function wireCaptions() {
           const tt = player.textTracks[0];
@@ -2567,11 +2840,16 @@ Major UI Systems
           };
         }
 
+        // Ensures an event handler is only attached once to a DOM element.
+        // Prevents duplicate listeners during re-renders.
+
         function wireOnce(el, handler) {
           if (!el || el.dataset.wired) return;
           el.dataset.wired = "1";
           el.addEventListener("click", handler);
         }
+
+        // Escapes HTML to prevent injection when rendering user-controlled text.
 
         function escapeHtml(str) {
           if (str == null) return "";
@@ -2588,6 +2866,9 @@ Major UI Systems
         // Handles playback loading, subtitle tracks, and caption rendering.
         // ============================================================================
 
+        // Moves the audio player UI above the selected result row.
+        // Falls back to the default position if no row is provided.
+
         function placePlayerAboveRow(row) {
           if (!playerPanel) return;
 
@@ -2602,6 +2883,9 @@ Major UI Systems
           }
         }
 
+        // Plays a segment from a given file.
+        // If the file is already loaded, seek directly; otherwise load it first.
+
         function playFromSegment(filename, startSec) {
           if (currentFile === filename && player.src) {
             player.currentTime = startSec;
@@ -2610,6 +2894,9 @@ Major UI Systems
             loadFile(filename, startSec * 1000);
           }
         }
+
+        // Loads an audio file into the player and initializes playback state.
+        // Also prepares transcript segments and timeline markers if available.
 
         function loadFile(filename, startMs = 0, autoplay = true) {
           const previousFile = currentFile;
@@ -2692,6 +2979,9 @@ Major UI Systems
           wireCaptions();
         }
 
+        // Refreshes the Browse view if it is currently active.
+        // Used after operations that change file state (delete, reimport, etc.).
+
         function refreshBrowseIfVisible() {
           if (mode === "browse") {
             tabBrowse.click();
@@ -2699,6 +2989,9 @@ Major UI Systems
         }
 
         const PINNED_FILES_KEY = "strixnote_pinned_files";
+
+        // Retrieves pinned files from localStorage.
+        // Returns an empty array if storage is missing or invalid.
 
         function getPinnedFiles() {
           try {
@@ -2710,15 +3003,22 @@ Major UI Systems
           }
         }
 
+        // Saves the pinned file list to localStorage.
+
         function setPinnedFiles(files) {
           try {
             localStorage.setItem(PINNED_FILES_KEY, JSON.stringify(files));
           } catch (e) { }
         }
 
+        // Checks if a file is currently pinned in localStorage.
+
         function isPinnedFile(filename) {
           return getPinnedFiles().includes(filename);
         }
+
+        // Adds or removes a file from the pinned list.
+        // Pinned files are stored locally and shown first in Browse mode.
 
         function setFilePinned(filename, pinned) {
           const current = getPinnedFiles();
@@ -2727,6 +3027,9 @@ Major UI Systems
             : current.filter(f => f !== filename);
           setPinnedFiles(next);
         }
+
+        // Loads pinned files from the index so they can be shown at the top
+        // of Browse results regardless of pagination.
 
         async function getPinnedBrowseDocs() {
           const pinned = getPinnedFiles();
@@ -2770,6 +3073,8 @@ Major UI Systems
         //   • date filters
         //   • sorting
         // ============================================================================
+        // Main search entry point.
+        // Builds filters, prepares request payload, executes search, and renders results.
 
         async function performSearch() {
 
@@ -2784,6 +3089,9 @@ Major UI Systems
 
           // If end is blank, treat it as same day as start (single-day range)
           let endDay = endDayRaw || startDay;
+
+          // Build date filter using either uploaded date (created_at) or
+          // recorded date (recorded_at). Uses an inclusive start and exclusive end.
 
           if ((field === "created_at" || field === "recorded_at") && startDay) {
             // start/end are YYYY-MM-DD; compute local day start; end is inclusive, so add 1 day for exclusive bound
@@ -2806,11 +3114,19 @@ Major UI Systems
 
           if (!searchQuery && !filter) return;
 
+          // Determine search type:
+          // - filename search (matches file names)
+          // - file search (matches full transcript text per file)
+          // - segment search (matches individual transcript segments)
+
           const isFilename = (searchModeValue === "filename");
           const isFiles = (searchModeValue === "files") || (!searchQuery && !!filter);
           const isSegments = !isFiles && !isFilename;
           const segmentOrderMode = segmentOrder?.value || "relevance";
           const index = (isFiles || isFilename) ? INDEX_FILES : INDEX_SEG;
+
+          // For "position" mode, request a larger batch so we can sort segments
+          // by timeline position after retrieval.
 
           const requestLimit = (isSegments && segmentOrderMode === "position")
             ? Math.max(200, browseLimit * 10)
@@ -2819,6 +3135,9 @@ Major UI Systems
           const requestOffset = (isSegments && segmentOrderMode === "position")
             ? 0
             : searchOffset;
+
+          // Build the Meilisearch request payload.
+          // This includes query text, filters, pagination, highlighting, and sorting.
 
           const req = {
             q: searchQuery,
@@ -2844,6 +3163,9 @@ Major UI Systems
             req.attributesToSearchOn = ["text"];
           }
 
+          // Execute the search request through the backend proxy.
+          // All Meilisearch communication is routed through this helper.
+
           let data;
           try {
             data = await meili(index, req);
@@ -2855,6 +3177,10 @@ Major UI Systems
             if (searchSortBar) searchSortBar.style.display = "none";
             return;
           }
+
+          // When using "position" ordering for segment search, Meilisearch cannot
+          // sort by both file date and segment position simultaneously.
+          // So we fetch a larger result set, sort it client-side, then paginate.
 
           if (isSegments && segmentOrderMode === "position" && Array.isArray(data?.hits)) {
             const sortedHits = [...data.hits].sort((a, b) => {
@@ -2876,6 +3202,8 @@ Major UI Systems
             };
           }
 
+          // Clear any previous results before rendering the new search output.
+
           resultsDiv.innerHTML = "";
 
           if (!data.hits || data.hits.length === 0) {
@@ -2889,6 +3217,9 @@ Major UI Systems
           }
 
           if (searchSortBar) searchSortBar.style.display = (isFiles || isFilename) ? "flex" : "none";
+
+          // Update the search status text with total results, visible range,
+          // and sort direction when applicable.
 
           if (searchStatus) {
             const total = data.estimatedTotalHits ?? data.hits.length ?? 0;
@@ -2905,9 +3236,14 @@ Major UI Systems
             }
           }
 
+          // Render each result row based on the active search mode.
+
           (data.hits || []).forEach(hit => {
             const div = document.createElement("div");
             div.className = "result";
+
+            // File-search / filename-search result layout:
+            // shows file-level controls plus an expandable transcript panel.
 
             if (isFiles || isFilename) {
               div.innerHTML = `
@@ -3002,6 +3338,9 @@ Major UI Systems
       </div>
   `;
 
+              // If a highlighted search match exists in the snippet, scroll it into view
+              // after the result row is added to the DOM.
+
               setTimeout(() => {
                 const firstMark = div.querySelector(".snippet mark");
                 if (firstMark) {
@@ -3010,13 +3349,15 @@ Major UI Systems
               }, 0);
 
               // click anywhere except buttons/links -> play
+
               div.onclick = (e) => {
                 if (e.target.closest("a") || e.target.closest("button") || e.target.closest("input") || e.target.closest("label")) return;
                 placePlayerAboveRow(div);
                 loadFile(hit.filename, 0);
               };
 
-              // delete
+              // Delete handler for file-search results.
+
               const delBtn = div.querySelector(".btn-delete");
               if (delBtn) {
                 delBtn.onclick = async (e) => {
@@ -3046,6 +3387,8 @@ Major UI Systems
                 };
               }
 
+              // File bookmark toggle for file-search results.
+
               const bookmarkBtn = div.querySelector(".btn-bookmark");
               if (bookmarkBtn) {
                 bookmarkBtn.onclick = (e) => {
@@ -3062,6 +3405,9 @@ Major UI Systems
                   bookmarkBtn.classList.toggle("btn-bookmarked", active);
                 };
               }
+
+              // Cache the transcript controls for this file result, then wire
+              // transcript open, download, match navigation, clipping, and editing.
 
               const textBtn = div.querySelector(".btn-text");
               const transcriptWrap = div.querySelector(".transcriptWrap");
@@ -3084,6 +3430,9 @@ Major UI Systems
               });
               // transcript toggle (auto-close others)
             } else {
+
+              // Segment-search result layout:
+              // shows one matching segment with its file, timestamp, and match count.
 
               div.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
@@ -3117,6 +3466,8 @@ Major UI Systems
                 loadFile(hit.filename, hit.start_ms);
               };
 
+              // Segment bookmark toggle for segment-search results.
+
               const bookmarkSegBtn = div.querySelector(".btn-bookmark-seg");
               if (bookmarkSegBtn) {
                 bookmarkSegBtn.onclick = (e) => {
@@ -3147,6 +3498,9 @@ Major UI Systems
 
             }
 
+            // Segment search results can reopen the full transcript in Browse mode
+            // at the matching segment location.
+
             const openTranscriptBtn = div.querySelector(".btn-open-transcript");
             if (openTranscriptBtn) {
               openTranscriptBtn.onclick = async (e) => {
@@ -3169,6 +3523,8 @@ Major UI Systems
 
           });
 
+          // Update pager display after rendering search results.
+
           browsePager.style.display = "flex";
 
           // Pager + count
@@ -3181,6 +3537,9 @@ Major UI Systems
           prevPage.disabled = (searchOffset === 0);
           nextPage.disabled = !data.hits || data.hits.length < browseLimit;
         }
+
+        // Runs a search from the current UI state and optionally clears date filters after execution.
+
         async function runSearchFromUi(query, options = {}) {
           const { clearDates = true } = options;
 
@@ -3198,6 +3557,9 @@ Major UI Systems
             if (dateEnd) dateEnd.value = "";
           }
         }
+
+        // Pressing Enter in the search box runs a search immediately.
+
         searchBox.addEventListener("keypress", async e => {
           if (e.key !== "Enter") return;
 
@@ -3206,6 +3568,7 @@ Major UI Systems
         });
 
         const searchBtn = document.getElementById("searchBtn");
+        // Search button runs the current query using the existing search UI state.
 
         if (searchBtn) {
           searchBtn.addEventListener("click", async () => {
@@ -3215,6 +3578,8 @@ Major UI Systems
         }
 
         const clearBtn = document.getElementById("clearBtn");
+
+        // Clears all current search inputs, filters, results, and pager state.
 
         if (clearBtn) {
           clearBtn.addEventListener("click", () => {
@@ -3234,12 +3599,17 @@ Major UI Systems
           });
         }
 
+        // Formats a Date object as YYYY-MM-DD for the browser date inputs.
+
         function ymdLocal(d) {
           const mm = String(d.getMonth() + 1).padStart(2, "0");
           const dd = String(d.getDate()).padStart(2, "0");
           const yy = d.getFullYear();
           return `${yy}-${mm}-${dd}`;
         }
+
+        // Quick date-range presets for Search.
+        // Defaults to uploaded date unless the user already chose a date field.
 
         async function runPreset(daysBack) {
           const today = new Date();
@@ -3262,6 +3632,9 @@ Major UI Systems
         // Browse Mode
         // Displays transcript files with pagination and pinning.
         // ============================================================================
+
+        // Browse mode entry point.
+        // Loads indexed files, applies pinned-file ordering, and renders the Browse list.
 
         tabBrowse.onclick = async () => {
           setMode("browse");
@@ -3289,10 +3662,17 @@ Major UI Systems
           } else {
             emptyState.style.display = "none";
           }
+
+          // Load pinned documents separately so they can always appear first,
+          // regardless of normal Browse pagination.
+
           const pinnedDocs = await getPinnedBrowseDocs();
           const pinnedNames = new Set(pinnedDocs.map(d => d.filename));
           const pageDocs = (data.hits || []).filter(d => !pinnedNames.has(d.filename));
           const browseDocs = [...pinnedDocs, ...pageDocs];
+
+          // Render Browse results with pinned files placed at the top,
+          // followed by the current page of normal Browse results.
 
           browseDocs.forEach(hit => {
             const div = document.createElement("div");
@@ -3397,7 +3777,9 @@ Major UI Systems
       </div>
   `;
 
-            // click anywhere except delete → play
+            // Clicking the result row starts playback unless the click came
+            // from an interactive control such as a button, link, or checkbox.
+
             div.onclick = (e) => {
               // If clicking a button or link, do not trigger playback
               if (e.target.closest("a") || e.target.closest("button") || e.target.closest("input") || e.target.closest("label")) {
@@ -3409,7 +3791,9 @@ Major UI Systems
 
             resultsDiv.appendChild(div);
 
-            // Check processing state
+            // Check whether the file is still processing so the UI can show
+            // a badge and temporarily disable delete while work is active.
+
             const badge = div.querySelector(".procBadge");
             if (badge) {
               fetch(`/api/status?filename=${encodeURIComponent(hit.filename)}`)
@@ -3427,6 +3811,10 @@ Major UI Systems
                 })
                 .catch(() => { });
             }
+
+            // Pin toggle keeps selected files at the top of Browse results.
+            // Any pin change resets Browse to page 1 and re-renders the list.
+
             const pinToggle = div.querySelector(".pinToggle");
             if (pinToggle) {
               pinToggle.addEventListener("change", async (e) => {
@@ -3436,6 +3824,10 @@ Major UI Systems
                 await tabBrowse.onclick();
               });
             }
+
+            // Delete handler for Browse results.
+            // Removes the file from storage, clears related bookmarks, and removes the row from the UI.
+
             div.querySelector(".btn-delete").onclick = async (e) => {
               e.stopPropagation();
               if (!confirm(`Delete ${hit.filename}? This cannot be undone.`)) return;
@@ -3461,6 +3853,10 @@ Major UI Systems
               div.remove();
             };
 
+            // File bookmark toggle for Browse results.
+            // This updates local bookmarks immediately without needing a re-render.
+            // Locate bookmark button for this Browse result row.
+
             const bookmarkBtn = div.querySelector(".btn-bookmark");
             if (bookmarkBtn) {
               bookmarkBtn.onclick = (e) => {
@@ -3478,6 +3874,8 @@ Major UI Systems
               };
             }
 
+            // Cache DOM references for transcript controls in this row.
+
             const textBtn = div.querySelector(".btn-text");
             const transcriptWrap = div.querySelector(".transcriptWrap");
             const transcriptBox = div.querySelector(".transcriptBox");
@@ -3487,8 +3885,14 @@ Major UI Systems
             const prevMatchBtn = div.querySelector(".btn-match-prev");
             const nextMatchBtn = div.querySelector(".btn-match-next");
 
+            // Hide match navigation buttons by default.
+            // They are shown only when search highlighting is active.
+
             if (prevMatchBtn) prevMatchBtn.style.display = "none";
             if (nextMatchBtn) nextMatchBtn.style.display = "none";
+
+            // Wire transcript controls (open, download, navigation, clipping)
+            // for this Browse result row.
 
             wireTranscriptControls({
               div,
@@ -3502,6 +3906,8 @@ Major UI Systems
               nextMatchBtn,
             });
 
+            // Handle reopening a file from Browse (file-level open).
+
             if (
               pendingBrowseFileOpen &&
               pendingBrowseFileOpen.filename === hit.filename
@@ -3511,6 +3917,9 @@ Major UI Systems
               div.scrollIntoView({ block: "center", behavior: "smooth" });
               pendingBrowseFileOpen = null;
             }
+
+            // Handle reopening a transcript from a segment search result.
+            // Automatically opens transcript, highlights match, and scrolls into view.
 
             if (
               pendingBrowseTranscriptOpen &&
@@ -3598,9 +4007,15 @@ Major UI Systems
               }
             }
           });
+
+          // Finalize Browse rendering and update pager button state.
+
           prevPage.disabled = (browseOffset === 0);
           nextPage.disabled = !data.hits || data.hits.length < browseLimit;
         };
+
+        // Browse sort toggle:
+        // switches between newest-first and oldest-first ordering and persists preference.
 
         if (browseSortOrder) {
           let currentBrowseSort = "desc";
@@ -3635,6 +4050,9 @@ Major UI Systems
           });
         }
 
+        // Search sort toggle:
+        // switches between newest-first and oldest-first ordering and persists preference.
+
         if (searchSortOrder) {
           searchSortOrder.dataset.sort = "desc";
           try {
@@ -3666,6 +4084,9 @@ Major UI Systems
           });
         }
 
+        // Search tab behavior:
+        // clicking Search again re-runs the search if inputs are present.
+
         tabSearch.onclick = async () => {
           const wasSearch = (mode === "search");
 
@@ -3691,6 +4112,10 @@ Major UI Systems
             nextPage.disabled = true;
           }
         };
+
+        // Bookmarks tab entry:
+        // switches UI to bookmarks view and renders saved bookmarks.        
+
         if (tabBookmarks) {
           tabBookmarks.onclick = async () => {
             mode = "bookmarks";
@@ -3713,6 +4138,10 @@ Major UI Systems
             if (nextPage) nextPage.disabled = true;
           };
         }
+
+        // Settings tab entry:
+        // loads current settings and index health when opened.
+
         if (tabSettings) {
           tabSettings.onclick = async () => {
             setMode("settings");
@@ -3735,6 +4164,8 @@ Major UI Systems
           };
         }
 
+        // Saves current settings to the backend.
+
         if (settingsSaveBtn) {
           settingsSaveBtn.onclick = async () => {
             try {
@@ -3745,6 +4176,9 @@ Major UI Systems
             }
           };
         }
+
+        // Restores default settings in the UI without immediately saving them.
+        // User must click Save to apply changes.
 
         if (settingsResetBtn) {
           settingsResetBtn.onclick = async () => {
@@ -3777,6 +4211,9 @@ Major UI Systems
             }
           };
         }
+
+        // Rebuilds the search index by calling the backend.
+        // Displays progress and prevents duplicate reindex requests.
 
         if (reindexBtn) {
           reindexBtn.onclick = async () => {
@@ -3826,6 +4263,9 @@ Major UI Systems
         const chooseBtn = document.getElementById("chooseBtn");
         const chosenLabel = document.getElementById("chosenLabel");
 
+        // File picker UI:
+        // opens file selection dialog and updates label with selected file count.
+
         if (chooseBtn && uploadFiles) {
           chooseBtn.onclick = () => uploadFiles.click();
 
@@ -3835,6 +4275,10 @@ Major UI Systems
               n === 0 ? "No files chosen" : `${n} file(s) selected`;
           });
         }
+
+        // Polls backend processing status for an uploaded file and updates
+        // the progress UI, including estimated time and processing phase.
+
         async function pollProcessing(filename, progressWrap, progressContainer, progressPhase) {
           const progressBar = document.getElementById("uploadProgressBar");
           if (!progressBar) {
@@ -3960,6 +4404,9 @@ Major UI Systems
           progressPhase.textContent = "Processing timeout.";
         }
 
+        // Polls processing status for a re-imported clip until it completes.
+        // Refreshes Browse when processing finishes.
+
         async function pollClipReimport(filename) {
           const maxWaitMs = 30 * 60 * 1000; // 30 minutes safety
           const start = Date.now();
@@ -3990,6 +4437,9 @@ Major UI Systems
         // Handles audio file upload with progress tracking and processing polling.
         // ============================================================================
 
+        // Main upload handler:
+        // prepares form data, sends files to the backend, and tracks progress.
+
         async function doUpload() {
           const input = document.getElementById("uploadFiles");
           const mergeCheckbox = document.getElementById("mergeUpload");
@@ -4001,12 +4451,17 @@ Major UI Systems
           const progressPhase = document.getElementById("uploadPhase");
           const progressContainer = progressBar.parentElement;
 
+          // Validate that at least one file is selected before attempting upload.
+
           if (!input.files || input.files.length === 0) {
             status.textContent = "Select one or more audio files first.";
             return;
           }
 
           const mergeUploads = !!mergeCheckbox?.checked;
+
+          // Build multipart form payload for upload.
+          // Supports multiple files and optional merge mode.
 
           const form = new FormData();
           for (const f of input.files) form.append("files", f);
@@ -4018,8 +4473,13 @@ Major UI Systems
           progressBar.style.width = "0%";
           progressPhase.textContent = "Uploading...";
 
+          // Use XMLHttpRequest instead of fetch so we can track upload progress.
+
           const xhr = new XMLHttpRequest();
           xhr.open("POST", "/api/upload");
+
+          // Upload progress handler for the browser.
+          // Updates the progress bar based on bytes sent.
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
@@ -4027,6 +4487,11 @@ Major UI Systems
               progressBar.style.width = percent + "%";
             }
           };
+
+          // Upload completion handler:
+          // - parses backend response
+          // - determines which files to track
+          // - begins processing polling for each uploaded file
 
           xhr.onload = async () => {
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -4092,6 +4557,9 @@ Major UI Systems
             btn.disabled = false;
           };
 
+          // Network-level upload failure handler.
+          // Triggered if the request cannot reach the server.
+
           xhr.onerror = () => {
             progressPhase.textContent = "Upload failed.";
             btn.disabled = false;
@@ -4102,11 +4570,14 @@ Major UI Systems
 
         // ============================================================================
         // Theme Toggle System
-        // Persists light/dark theme preference in LocalStorage.
+        // Handles switching between light and dark themes and persists the
+        // selected preference in localStorage so it survives page reloads.
         // ============================================================================
 
         const themeToggle = document.getElementById("themeToggle");
         const THEME_KEY = "strixnote_theme";
+
+        // Applies the selected theme to the document and updates the button label.
 
         function applyTheme(theme) {
           const root = document.documentElement;
@@ -4120,7 +4591,10 @@ Major UI Systems
           }
         }
 
+        // Restore the saved theme on page load.
+        // Dark mode is used as the default if no saved preference exists.
         // Apply saved theme on load
+
         try {
           const saved = localStorage.getItem(THEME_KEY);
           if (saved === "light" || saved === "dark") applyTheme(saved);
@@ -4128,6 +4602,9 @@ Major UI Systems
         } catch (e) {
           applyTheme("dark");
         }
+
+        // Theme toggle button:
+        // switches theme immediately and saves the preference locally.
 
         if (themeToggle) {
           themeToggle.addEventListener("click", () => {
@@ -4141,7 +4618,12 @@ Major UI Systems
             } catch (e) { }
           });
         }
+
+        // Main upload button entry point.
+
         document.getElementById("uploadBtn")?.addEventListener("click", doUpload);
+
+        // Previous-page pager behavior for both Browse and Search modes.
 
         prevPage.onclick = async () => {
           if (mode === "settings") return;
@@ -4154,6 +4636,8 @@ Major UI Systems
           }
         };
 
+        // Next-page pager behavior for both Browse and Search modes.
+
         nextPage.onclick = async () => {
           if (mode === "settings") return;
           if (mode === "browse") {
@@ -4164,6 +4648,10 @@ Major UI Systems
             await performSearch();
           }
         };
+
+        // Initial page startup:
+        // - load transcript-related settings used by the UI
+        // - then open Browse as the default landing view
 
         (async () => {
           try {
