@@ -1140,6 +1140,15 @@ Major UI Systems
           return out;
         }
 
+        // normalizeTranscriptSegments:
+        // - merges Whisper segments into display segments
+        // - optionally splits on pauses (pauseMs threshold)
+        // - optionally splits on sentence punctuation
+        // - avoids splitting common abbreviations (e.g., "Mr.", "Dr.")
+        // - enforces max segment duration limits
+        // - interpolates timestamps when splitting text
+        // - used only in post-processed segmentation mode
+
         function normalizeTranscriptSegments(rawSegments) {
           if (!Array.isArray(rawSegments) || !rawSegments.length) return [];
 
@@ -1531,7 +1540,7 @@ Major UI Systems
 
             const marker = document.createElement("div");
             marker.className = "timelineMarker";
-            marker.dataset.startSec = String(seg.startSec);
+            marker.dataset.startSec = String(Math.floor(seg.startSec));
 
             const pct = (seg.startSec / dur) * 100;
             marker.style.left = pct + "%";
@@ -1540,13 +1549,7 @@ Major UI Systems
 
             marker.addEventListener("click", (e) => {
               e.stopPropagation();
-
-              if (currentFile === filename && player.src) {
-                player.currentTime = seg.startSec;
-                player.play().catch(() => { });
-              } else {
-                loadFile(filename, seg.startSec * 1000);
-              }
+              playFromSegment(filename, seg.startSec);
             });
 
             segmentTimeline.appendChild(marker);
@@ -1554,7 +1557,7 @@ Major UI Systems
           });
         }
 
-        function renderTranscriptSegments(transcriptBox, segments, filename, selectedClipSegments, refreshClipActions) {
+        function renderTranscriptSegments(transcriptBox, segments, filename, selectedClipSegments, refreshClipActions, segmentationMode = "whisper") {
           transcriptBox.innerHTML = "";
           transcriptBox.focus();
 
@@ -1621,15 +1624,6 @@ Major UI Systems
             });
           }
 
-          const playFromSegment = (filename, startSec) => {
-            if (currentFile === filename && player.src) {
-              player.currentTime = startSec;
-              player.play().catch(() => { });
-            } else {
-              loadFile(filename, startSec * 1000);
-            }
-          };
-
           const setTimelineHover = (startSec) => {
             document.querySelectorAll(".timelineMarker.hover").forEach(m => {
               m.classList.remove("hover");
@@ -1647,7 +1641,7 @@ Major UI Systems
             row.className = "transcriptSeg";
             row.style.display = "flex";
             row.style.alignItems = "flex-start";
-            row.dataset.startSec = String(seg.startSec);
+            row.dataset.startSec = String(Math.floor(seg.startSec));
             row.dataset.endSec = String(Number(seg.endSec || seg.startSec));
 
             row.addEventListener("mouseenter", () => {
@@ -1738,7 +1732,7 @@ Major UI Systems
               e.stopPropagation();
 
               // Only allow editing in Whisper default mode
-              const currentSegMode = transcriptSegmentationModeValue || "whisper";
+              const currentSegMode = segmentationMode || "whisper";
               if (currentSegMode !== "whisper") {
                 alert("Editing is only available in Whisper default segmentation mode. Mode can be changed in settings.");
                 return;
@@ -2017,7 +2011,8 @@ Major UI Systems
             segments,
             filename,
             selectedClipSegments,
-            refreshClipActions
+            refreshClipActions,
+            transcriptSegmentationModeValue || "whisper"
           );
         }
 
@@ -2058,12 +2053,7 @@ Major UI Systems
 
             const sec = Number(row.dataset.startSec || 0);
             placePlayerAboveRow(transcriptBox.closest(".result"));
-            if (currentFile === filename && player.src) {
-              player.currentTime = sec;
-              player.play().catch(() => { });
-            } else {
-              loadFile(filename, sec * 1000);
-            }
+            playFromSegment(filename, sec);
           };
 
           const moveMatch = (direction) => {
@@ -2176,63 +2166,54 @@ Major UI Systems
             e.stopPropagation();
           });
 
-          if (clipClearBtn && !clipClearBtn.dataset.wired) {
-            clipClearBtn.dataset.wired = "1";
-            clipClearBtn.addEventListener("click", (e) => {
-              e.stopPropagation();
+          wireOnce(clipClearBtn, (e) => {
+            e.stopPropagation();
 
-              selectedClipSegments.clear();
+            selectedClipSegments.clear();
 
-              transcriptBox.querySelectorAll(".transcriptSeg").forEach(r => {
-                r.classList.remove("clip-selected");
-                const c = r.querySelector(".transcriptClip");
-                if (c) c.classList.remove("active");
-              });
-
-              refreshClipActions();
+            transcriptBox.querySelectorAll(".transcriptSeg").forEach(r => {
+              r.classList.remove("clip-selected");
+              const c = r.querySelector(".transcriptClip");
+              if (c) c.classList.remove("active");
             });
-          }
 
-          if (clipDownloadBtn && !clipDownloadBtn.dataset.wired) {
-            clipDownloadBtn.dataset.wired = "1";
-            clipDownloadBtn.addEventListener("click", async (e) => {
-              e.stopPropagation();
+            refreshClipActions();
+          });
 
-              const resp = await postClipRequest("download");
+          wireOnce(clipDownloadBtn, async (e) => {
+            e.stopPropagation();
 
-              if (await handleClipError(resp, "Clip download failed: ")) return;
+            const resp = await postClipRequest("download");
 
-              const blob = await resp.blob();
-              const url = URL.createObjectURL(blob);
+            if (await handleClipError(resp, "Clip download failed: ")) return;
 
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = filename.replace(/\.\w+$/, "") + "_clip.wav";
-              document.body.appendChild(a);
-              a.click();
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
 
-              setTimeout(() => {
-                URL.revokeObjectURL(url);
-                a.remove();
-              }, 100);
-            });
-          }
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename.replace(/\.\w+$/, "") + "_clip.wav";
+            document.body.appendChild(a);
+            a.click();
 
-          if (clipReimportBtn && !clipReimportBtn.dataset.wired) {
-            clipReimportBtn.dataset.wired = "1";
-            clipReimportBtn.addEventListener("click", async (e) => {
-              e.stopPropagation();
+            setTimeout(() => {
+              URL.revokeObjectURL(url);
+              a.remove();
+            }, 100);
+          });
 
-              const resp = await postClipRequest("reimport");
+          wireOnce(clipReimportBtn, async (e) => {
+            e.stopPropagation();
 
-              if (await handleClipError(resp, "Send to StrixNote failed: ")) return;
+            const resp = await postClipRequest("reimport");
 
-              const data = await resp.json().catch(() => ({}));
+            if (await handleClipError(resp, "Send to StrixNote failed: ")) return;
 
-              setClipStatus(`Clip sent to StrixNote as ${data.filename}. Browse will refresh automatically when processing is complete.`);
-              pollClipReimport(data.filename);
-            });
-          }
+            const data = await resp.json().catch(() => ({}));
+
+            setClipStatus(`Clip sent to StrixNote as ${data.filename}. Browse will refresh automatically when processing is complete.`);
+            pollClipReimport(data.filename);
+          });
 
           if (prevMatchBtn) prevMatchBtn.style.display = "none";
           if (nextMatchBtn) nextMatchBtn.style.display = "none";
@@ -2564,7 +2545,7 @@ Major UI Systems
 
             captionBox.textContent = String(activeSeg.text || "").trim();
 
-            const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${String(activeSeg.startSec)}"]`);
+            const activeRow = document.querySelector(`.transcriptSeg[data-start-sec="${String(Math.floor(activeSeg.startSec))}"]`);
             if (activeRow) {
               activeRow.classList.add("active");
 
@@ -2579,12 +2560,19 @@ Major UI Systems
               }
             }
 
-            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${String(activeSeg.startSec)}"]`);
+            const activeMarker = document.querySelector(`.timelineMarker[data-start-sec="${String(Math.floor(activeSeg.startSec))}"]`);
             if (activeMarker) {
               activeMarker.classList.add("active");
             }
           };
         }
+
+        function wireOnce(el, handler) {
+          if (!el || el.dataset.wired) return;
+          el.dataset.wired = "1";
+          el.addEventListener("click", handler);
+        }
+
         function escapeHtml(str) {
           if (str == null) return "";
           return String(str)
@@ -2611,6 +2599,15 @@ Major UI Systems
             row.parentNode.insertBefore(playerPanel, row);
           } else if (playerHomeAnchor && playerHomeAnchor.parentNode) {
             playerHomeAnchor.parentNode.insertBefore(playerPanel, playerHomeAnchor);
+          }
+        }
+
+        function playFromSegment(filename, startSec) {
+          if (currentFile === filename && player.src) {
+            player.currentTime = startSec;
+            player.play().catch(() => { });
+          } else {
+            loadFile(filename, startSec * 1000);
           }
         }
 
