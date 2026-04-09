@@ -259,27 +259,107 @@ def sanitize_segment_text(text: str, max_len: int = 300) -> str:
         cleaned = cleaned[:max_len].rstrip()
     return cleaned
 
+def parse_iso_creation_time_to_epoch(value: str) -> int | None:
+    try:
+        s = str(value or "").strip()
+        if not s:
+            return None
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return int(datetime.fromisoformat(s).timestamp())
+    except Exception:
+        return None
+
+
+def parse_recorded_at_from_filename(filename: str) -> int | None:
+    m = re.match(r"^R(\d{8})-(\d{6})\.[A-Za-z0-9]+$", str(filename or ""))
+    if not m:
+        return None
+
+    try:
+        d = m.group(1)
+        t = m.group(2)
+        dt = datetime.strptime(d + t, "%Y%m%d%H%M%S")
+        return int(dt.timestamp())
+    except Exception:
+        return None
+
+
+def extract_recorded_at(audio_path: Path) -> int:
+    fallback = int(audio_path.stat().st_mtime)
+
+    # 1) Embedded metadata (phones / m4a / mp4 / mov, etc.)
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_entries", "format_tags:stream_tags",
+                str(audio_path),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+
+        payload = json.loads(result.stdout or "{}")
+        candidate_values = []
+
+        fmt_tags = (payload.get("format") or {}).get("tags") or {}
+        if isinstance(fmt_tags, dict):
+            candidate_values.extend([
+                fmt_tags.get("creation_time"),
+                fmt_tags.get("date"),
+                fmt_tags.get("com.apple.quicktime.creationdate"),
+            ])
+
+        for stream in payload.get("streams") or []:
+            tags = (stream or {}).get("tags") or {}
+            if isinstance(tags, dict):
+                candidate_values.extend([
+                    tags.get("creation_time"),
+                    tags.get("date"),
+                    tags.get("com.apple.quicktime.creationdate"),
+                ])
+
+        for value in candidate_values:
+            ts = parse_iso_creation_time_to_epoch(value)
+            if ts is not None:
+                return ts
+    except Exception:
+        pass
+
+    # 2) Recorder-style filename fallback: RYYYYMMDD-HHMMSS.ext
+    ts = parse_recorded_at_from_filename(audio_path.name)
+    if ts is not None:
+        return ts
+
+    # 3) Last fallback: uploaded/modified time
+    return fallback
+
 def build_file_doc(audio_path: Path, txt_path: Path) -> dict:
     filename = audio_path.name
-    base = audio_path.stem
     text = txt_path.read_text(encoding="utf-8").strip()
     created_at = int(audio_path.stat().st_mtime)
+    recorded_at = extract_recorded_at(audio_path)
 
     return {
         "id": safe_id_from_filename(filename),
         "filename": filename,
         "text": text,
         "created_at": created_at,
-        "recorded_at": created_at,
+        "recorded_at": recorded_at,
         "audio_bytes": audio_path.stat().st_size,
         "duration_s": probe_duration_seconds(str(audio_path)),
     }
-
 
 def build_segment_docs(audio_path: Path, vtt_path: Path) -> list[dict]:
     filename = audio_path.name
     base_id = safe_id_from_filename(filename)
     created_at = int(audio_path.stat().st_mtime)
+    recorded_at = extract_recorded_at(audio_path)
     vtt_text = vtt_path.read_text(encoding="utf-8")
     parsed = parse_vtt_segments(vtt_text)
 
@@ -293,7 +373,7 @@ def build_segment_docs(audio_path: Path, vtt_path: Path) -> list[dict]:
                 "end_ms": seg["end_ms"],
                 "text": seg["text"],
                 "created_at": created_at,
-                "recorded_at": created_at,
+                "recorded_at": recorded_at,
             }
         )
     return docs
