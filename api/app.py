@@ -40,6 +40,8 @@ INCOMING_DIR = os.environ.get("INCOMING_DIR", f"{DATA_DIR}/incoming")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", f"{DATA_DIR}/processed")
 STATUS_DIR = os.environ.get("STATUS_DIR", f"{DATA_DIR}/status")
 
+  # Generates a temporary output path for audio clips.
+
 def make_clip_output_path(base_name: str) -> str:
     safe = re.sub(r"[^a-zA-Z0-9._-]", "_", base_name)
     ts = int(time.time())
@@ -61,10 +63,12 @@ MIN_FREE_BYTES = (
     int(os.environ.get("MIN_FREE_GB", "1")) * 1024 * 1024 * 1024
 )  # default 1 GiB
 
+  # Returns available free disk space in bytes.
 
 def get_free_bytes(path: str) -> int:
     return shutil.disk_usage(path).free
 
+  # Checks whether enough disk space is available before accepting uploads.
 
 def has_enough_disk(path: str, min_free_bytes: int) -> bool:
     try:
@@ -77,6 +81,7 @@ def has_enough_disk(path: str, min_free_bytes: int) -> bool:
 def meili_headers():
     return {"Authorization": f"Bearer {MEILI_MASTER_KEY}"} if MEILI_MASTER_KEY else {}
 
+  # Polls Meilisearch task status for a short time to detect failures early.
 
 def wait_meili_task(task_uid, timeout_s=3.0, interval_s=0.1):
     """
@@ -111,6 +116,7 @@ def wait_meili_task(task_uid, timeout_s=3.0, interval_s=0.1):
     # Timed out waiting; return last known state (likely enqueued/processing)
     return last or {"uid": task_uid, "status": "unknown", "note": "poll_timeout"}
 
+  # Sanitizes uploaded filenames by removing unsafe characters.
 
 def sanitize_filename(name: str) -> str:
     # Keep original name as much as possible, but remove path separators and control chars.
@@ -118,6 +124,7 @@ def sanitize_filename(name: str) -> str:
     name = re.sub(r"[\x00-\x1f\x7f]", "", name).strip()
     return name
 
+  # Generates a safe document ID from a filename for indexing.
 
 def safe_id_from_filename(filename: str) -> str:
     # Used only for deleting transcripts index (primary key is `id` = base).
@@ -125,12 +132,15 @@ def safe_id_from_filename(filename: str) -> str:
     base = Path(filename).stem
     return re.sub(r"[^A-Za-z0-9_-]+", "_", base).strip("_") or "file"
 
+  # Generates the file path used to store progress information.
+
 def progress_path_for(filename: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("._")
     if not safe:
         safe = "file"
     return Path(STATUS_DIR) / f"{safe}.progress.json"
 
+  # Reads processing progress information for a given file if available.
 
 def read_progress(filename: str) -> dict | None:
     try:
@@ -141,6 +151,8 @@ def read_progress(filename: str) -> dict | None:
             return json.load(f)
     except Exception:
         return None
+    
+  # Internal helper for making HTTP requests to Meilisearch.
 
 def _meili_request(method: str, path: str, json_body=None, timeout=5):
     url = f"{MEILI_URL}{path}"
@@ -150,6 +162,7 @@ def _meili_request(method: str, path: str, json_body=None, timeout=5):
     r = requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
     return r
 
+  # Uses ffprobe to determine audio duration in seconds.
 
 def probe_duration_seconds(path: str) -> float:
     try:
@@ -173,6 +186,7 @@ def probe_duration_seconds(path: str) -> float:
     except Exception:
         return 0.0
 
+  # Parses a VTT file into structured transcript segments.
 
 def parse_vtt_segments(vtt_text: str) -> list[dict]:
     lines = (vtt_text or "").replace("\r", "").split("\n")
@@ -219,6 +233,8 @@ def parse_vtt_segments(vtt_text: str) -> list[dict]:
 
     return segments
 
+  # Converts milliseconds to VTT timestamp format.
+
 def ms_to_vtt_timestamp(ms: int) -> str:
     total_ms = max(0, int(ms))
     hours = total_ms // 3_600_000
@@ -227,10 +243,12 @@ def ms_to_vtt_timestamp(ms: int) -> str:
     millis = total_ms % 1000
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
 
+  # Converts milliseconds to SRT timestamp format.
 
 def ms_to_srt_timestamp(ms: int) -> str:
     return ms_to_vtt_timestamp(ms).replace(".", ",")
 
+  # Writes subtitle data in VTT format from transcript segments.
 
 def write_vtt_segments(vtt_path: Path, segments: list[dict]) -> None:
     with open(vtt_path, "w", encoding="utf-8") as f:
@@ -239,6 +257,7 @@ def write_vtt_segments(vtt_path: Path, segments: list[dict]) -> None:
             f.write(f"{ms_to_vtt_timestamp(seg['start_ms'])} --> {ms_to_vtt_timestamp(seg['end_ms'])}\n")
             f.write(f"{(seg.get('text') or '').strip()}\n\n")
 
+  # Writes subtitle data in SRT format from transcript segments.
 
 def write_srt_segments(srt_path: Path, segments: list[dict]) -> None:
     with open(srt_path, "w", encoding="utf-8") as f:
@@ -247,17 +266,22 @@ def write_srt_segments(srt_path: Path, segments: list[dict]) -> None:
             f.write(f"{ms_to_srt_timestamp(seg['start_ms'])} --> {ms_to_srt_timestamp(seg['end_ms'])}\n")
             f.write(f"{(seg.get('text') or '').strip()}\n\n")
 
+  # Writes a plain text transcript file from parsed segments.
 
 def write_txt_from_segments(txt_path: Path, segments: list[dict]) -> None:
     text = "\n".join((seg.get("text") or "").strip() for seg in segments if (seg.get("text") or "").strip())
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(text)
 
+  # Cleans and trims segment text, enforcing a maximum length.
+
 def sanitize_segment_text(text: str, max_len: int = 300) -> str:
     cleaned = " ".join(str(text or "").replace("\r", " ").replace("\n", " ").split()).strip()
     if len(cleaned) > max_len:
         cleaned = cleaned[:max_len].rstrip()
     return cleaned
+
+  # Converts ISO-style metadata timestamps into epoch seconds.
 
 def parse_iso_creation_time_to_epoch(value: str) -> int | None:
     try:
@@ -270,6 +294,7 @@ def parse_iso_creation_time_to_epoch(value: str) -> int | None:
     except Exception:
         return None
 
+  # Attempts to extract a timestamp from recorder-style filenames (RYYYYMMDD-HHMMSS).
 
 def parse_recorded_at_from_filename(filename: str) -> int | None:
     m = re.match(r"^R(\d{8})-(\d{6})\.[A-Za-z0-9]+$", str(filename or ""))
@@ -284,6 +309,11 @@ def parse_recorded_at_from_filename(filename: str) -> int | None:
     except Exception:
         return None
 
+
+  # Determines the recorded timestamp for an audio file using:
+  # 1) embedded metadata
+  # 2) filename pattern
+  # 3) file modification time fallback
 
 def extract_recorded_at(audio_path: Path) -> int:
     fallback = int(audio_path.stat().st_mtime)
@@ -339,6 +369,9 @@ def extract_recorded_at(audio_path: Path) -> int:
     # 3) Last fallback: uploaded/modified time
     return fallback
 
+  # Builds a file-level document for Meilisearch indexing.
+  # Includes transcript text, timestamps, and metadata.
+
 def build_file_doc(audio_path: Path, txt_path: Path) -> dict:
     filename = audio_path.name
     text = txt_path.read_text(encoding="utf-8").strip()
@@ -354,6 +387,8 @@ def build_file_doc(audio_path: Path, txt_path: Path) -> dict:
         "audio_bytes": audio_path.stat().st_size,
         "duration_s": probe_duration_seconds(str(audio_path)),
     }
+
+  # Builds segment-level documents for Meilisearch from VTT transcript data.
 
 def build_segment_docs(audio_path: Path, vtt_path: Path) -> list[dict]:
     filename = audio_path.name
@@ -378,6 +413,8 @@ def build_segment_docs(audio_path: Path, vtt_path: Path) -> list[dict]:
         )
     return docs
 
+  # Rebuilds Meilisearch indexes from files in the processed directory.
+  # Used when recovering or re-syncing the search index.
 
 def rebuild_meili_from_processed() -> dict:
     processed_dir = Path(PROCESSED_DIR)
@@ -406,7 +443,8 @@ def rebuild_meili_from_processed() -> dict:
 
     summary["files_scanned"] = len(audio_files)
 
-    # Clear existing docs first
+      # Clear existing Meilisearch documents before rebuilding indexes.
+
     try:
         r1 = _meili_request(
             "DELETE", f"/indexes/{INDEX_TRANSCRIPTS}/documents", timeout=30
@@ -427,6 +465,8 @@ def rebuild_meili_from_processed() -> dict:
 
     file_docs = []
     segment_docs = []
+
+      # Scan processed directory and build documents for indexing.
 
     for audio_path in audio_files:
         txt_path = processed_dir / f"{audio_path.stem}.txt"
@@ -468,6 +508,8 @@ def rebuild_meili_from_processed() -> dict:
         else:
             summary["segment_files_skipped"] += 1
 
+      # Push rebuilt documents into Meilisearch indexes.
+
     try:
         if file_docs:
             r = _meili_request(
@@ -498,6 +540,8 @@ def rebuild_meili_from_processed() -> dict:
 
     return summary
 
+  # Ensures Meilisearch schema matches what the API expects.
+  # This includes index existence and required settings.
 
 def ensure_meili_schema():
     """
@@ -511,7 +555,8 @@ def ensure_meili_schema():
         summary["steps"].append({"skip": "MEILI_MASTER_KEY not set"})
         return summary
 
-    # Health check
+      # Verify Meilisearch is reachable before attempting schema updates.
+
     try:
         r = _meili_request("GET", "/health", timeout=3)
         r.raise_for_status()
@@ -519,9 +564,13 @@ def ensure_meili_schema():
     except Exception as e:
         summary["steps"].append({"health_error": str(e)})
         return summary
+    
+      # Helper function to verify or create a Meilisearch index.
 
     def _ensure_index(uid: str, primary_key: str = "id"):
+
         # Create index if missing
+
         try:
             r = _meili_request("GET", f"/indexes/{uid}")
             if r.status_code == 200:
@@ -549,13 +598,14 @@ def ensure_meili_schema():
             summary["steps"].append({"index_create_error": {uid: str(e)}})
             return False
 
-    # Ensure required indexes
+    # Ensure required indexes exist before configuring settings.
+
     if not _ensure_index(INDEX_TRANSCRIPTS, "id"):
         return summary
     if not _ensure_index(INDEX_SEGMENTS, "id"):
         return summary
-
-    # Ensure filterable attributes needed by the UI/API
+    
+    # Ensure required filterable attributes exist for date filtering and deletion.
     # segments: delete-by-filter + date filtering
     # transcripts: date filtering
     try:
@@ -591,7 +641,9 @@ def ensure_meili_schema():
         summary["steps"].append({"filterable_error": str(e)})
         return summary
 
-    # Optional: ensure sortable attributes exist (nice-to-have)
+      # Optional configuration:
+      # ensures indexes support sorting for UI features like date ordering.
+
     try:
         _meili_request(
             "PUT",
@@ -612,11 +664,16 @@ def ensure_meili_schema():
     summary["ok"] = True
     return summary
 
-
+# One-time startup initialization:
+# ensures Meilisearch indexes and settings exist when the container starts.
 # Run Meili schema verification once per container start (avoid running in every gunicorn worker)
 # Uses a simple file lock in /tmp shared by all workers in the container.
+
 _LOCK_PATH = "/tmp/strixnote_meili_schema.lock"
 _REINDEX_LOCK_PATH = "/tmp/strixnote_reindex.lock"
+
+  # Simple file-based lock:
+  # ensures only one worker performs initialization tasks (like schema setup).
 
 def _try_acquire_lock(path: str) -> bool:
     try:
@@ -641,17 +698,22 @@ else:
         "Meili schema verification: skipped (another worker already ran it)", flush=True
     )
 
+  # Health check endpoint:
+  # used by monitoring or frontend to confirm the API is responsive.
 
 @app.get("/health")
 def health():
     return jsonify({"ok": True, "time": int(time.time())})
 
+  # Upload endpoint:
+  # handles file validation, optional merging, and saving to the incoming directory.
 
 @app.post("/upload")
 def upload():
     os.makedirs(INCOMING_DIR, exist_ok=True)
 
-    # Disk space safeguard
+    # Disk space safeguard:
+    # prevents uploads when the server is low on available storage.
     if not has_enough_disk(INCOMING_DIR, MIN_FREE_BYTES):
         free_b = get_free_bytes(INCOMING_DIR)
         return (
@@ -664,8 +726,9 @@ def upload():
             ),
             507,
         )
-
     # Request-size safeguard (best-effort; relies on client/NGINX sending Content-Length)
+      # rejects uploads that exceed configured limits based on Content-Length.
+
     cl = request.content_length
     if cl is not None and cl > MAX_UPLOAD_BYTES:
         return (
@@ -679,12 +742,17 @@ def upload():
             413,
         )
 
+      # Validate that the request contains file data.
+
     if "files" not in request.files:
         return jsonify({"error": "missing files field"}), 400
 
     files = request.files.getlist("files")
     if not files:
         return jsonify({"error": "no files"}), 400
+
+      # Optional merge mode:
+      # allows multiple uploaded files to be combined into a single audio file.
 
     merge_uploads = str(request.form.get("merge_uploads", "0")).strip().lower() in (
         "1",
@@ -700,12 +768,17 @@ def upload():
         temp_paths = []
         list_path = None
 
+              # Merge upload mode:
+              # multiple files are combined into a single audio file before processing.
+
         try:
             for i, f in enumerate(files, start=1):
                 orig = sanitize_filename(f.filename or "")
                 if not orig:
                     rejected.append({"filename": "", "reason": "empty filename"})
                     continue
+
+                  # Reject files with unsupported audio extensions.
 
                 ext = Path(orig).suffix.lower()
                 if ext not in AUDIO_EXTS:
@@ -714,12 +787,16 @@ def upload():
                     )
                     continue
 
+                  # Attempt to determine file size from the upload stream.
+
                 try:
                     f.stream.seek(0, os.SEEK_END)
                     size = f.stream.tell()
                     f.stream.seek(0)
                 except Exception:
                     size = None
+
+                  # Enforce per-file size limits before accepting into merge list.
 
                 if size is not None and size > MAX_UPLOAD_BYTES:
                     rejected.append(
@@ -729,6 +806,8 @@ def upload():
                         }
                     )
                     continue
+
+                 # Save each uploaded file to a temporary location before merging.
 
                 temp_name = f"merge_src_{int(time.time() * 1000)}_{i:03d}{ext}"
                 temp_path = Path("/tmp") / temp_name
@@ -747,6 +826,8 @@ def upload():
 
                 temp_paths.append(temp_path)
 
+              # Require at least two valid files for merge operation.
+
             if len(temp_paths) < 2:
                 return jsonify(
                     {
@@ -755,6 +836,8 @@ def upload():
                     }
                 ), 400
 
+              # Generate a unique output filename for the merged audio file.
+
             merged_name = f"merged_{int(time.time() * 1000)}.wav"
             dest = Path(INCOMING_DIR) / merged_name
 
@@ -762,11 +845,17 @@ def upload():
                 merged_name = f"merged_{int(time.time() * 1000)}_{os.getpid()}.wav"
                 dest = Path(INCOMING_DIR) / merged_name
 
+              # Build temporary file list for ffmpeg concat input.
+
             list_path = Path("/tmp") / f"merge_list_{int(time.time() * 1000)}.txt"
             with open(list_path, "w", encoding="utf-8") as lf:
                 for p in temp_paths:
                     escaped = str(p).replace("'", "'\\''")
                     lf.write(f"file '{escaped}'\n")
+
+
+              # Use ffmpeg concat demuxer to merge audio files into a single WAV file.
+              # Output is normalized to mono, 16 kHz for consistent downstream processing.
 
             subprocess.run(
                 [
@@ -803,6 +892,8 @@ def upload():
             saved.append({"filename": merged_name, "bytes": final_size})
             return jsonify({"saved": saved, "rejected": rejected})
 
+        # Handle ffmpeg failures during merge (e.g., incompatible formats).
+
         except subprocess.CalledProcessError as e:
             return jsonify(
                 {
@@ -813,6 +904,8 @@ def upload():
 
         except Exception as e:
             return jsonify({"error": f"merge failed: {str(e)}"}), 500
+
+          # Cleanup temporary files created during merge processing.
 
         finally:
             for p in temp_paths:
@@ -826,6 +919,9 @@ def upload():
                     list_path.unlink(missing_ok=True)
                 except Exception:
                     pass
+
+    # Standard (non-merge) upload flow:
+    # each file is validated and saved individually to the incoming directory.
 
     for f in files:
         orig = sanitize_filename(f.filename or "")
@@ -841,6 +937,7 @@ def upload():
             continue
 
         # File size safeguard
+        
         try:
             f.stream.seek(0, os.SEEK_END)
             size = f.stream.tell()
@@ -860,14 +957,17 @@ def upload():
         dest = Path(INCOMING_DIR) / orig
 
         # Hard rule: do not overwrite existing files
+
         if dest.exists():
             rejected.append({"filename": orig, "reason": "already exists"})
             continue
 
         # Stream to disk
+
         f.save(str(dest))
 
         # Final size check (protect against missing Content-Length)
+
         final_size = dest.stat().st_size
         if final_size > MAX_UPLOAD_BYTES:
             dest.unlink(missing_ok=True)
@@ -883,15 +983,25 @@ def upload():
 
     return jsonify({"saved": saved, "rejected": rejected})
 
+    # Meilisearch proxy endpoint:
+    # Accepts a standard Meili search payload and forwards it to the backend service.
+
 @app.post("/meili/search/<index>")
 def meili_search(index: str):
+
     # Proxy Meilisearch search so the browser never needs the Meili key.
     # Expects the request body to be the same JSON you would POST to /indexes/<index>/search
+
     body = request.get_json(silent=True) or {}
 
-    # Basic allowlist to avoid proxying arbitrary indexes
+    # Only allow known indexes to be queried through this proxy.
+    # Prevents misuse of the endpoint to access arbitrary Meilisearch data.
+
     if index not in (INDEX_TRANSCRIPTS, INDEX_SEGMENTS):
         return jsonify({"error": "invalid index"}), 400
+
+    # Forward the search request to Meilisearch and return the raw response.
+    # This keeps the frontend simple and avoids exposing the Meili API key.
 
     try:
         r = requests.post(
@@ -911,19 +1021,24 @@ def meili_search(index: str):
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 )
 def meili_proxy(subpath: str):
+
     # Generic Meilisearch reverse-proxy so the browser never needs keys.
     # Nginx routes /api/* -> this Flask app, so /api/meili/... becomes /meili/...
+
     try:
         url = f"{MEILI_URL}/{subpath}"
 
         # Forward query string
+
         if request.query_string:
             url = f"{url}?{request.query_string.decode('utf-8', errors='ignore')}"
 
         # Forward body (raw bytes so it works for JSON and non-JSON)
+
         data = request.get_data()
 
         # Forward only safe headers; always inject Authorization here
+
         headers = {}
         ct = request.headers.get("Content-Type")
         if ct:
@@ -944,6 +1059,7 @@ def meili_proxy(subpath: str):
         )
 
         # Pass through Meili response (status + content-type + body)
+
         resp = Response(r.content, status=r.status_code)
         resp.headers["Content-Type"] = r.headers.get("Content-Type", "application/json")
         return resp
@@ -951,6 +1067,8 @@ def meili_proxy(subpath: str):
     except Exception as e:
         return jsonify({"error": f"meili proxy failed: {e}"}), 502
 
+# Status endpoint:
+# reports processing state and disk availability for a specific file.
 
 @app.get("/status")
 def status():
@@ -968,6 +1086,8 @@ def status():
     processed_srt = Path(PROCESSED_DIR) / f"{base}.srt"
     processed_vtt = Path(PROCESSED_DIR) / f"{base}.vtt"
 
+    # Determine processing state using progress file and filesystem checks.
+
     progress = read_progress(filename)
 
     if progress:
@@ -980,7 +1100,9 @@ def status():
         state = "queued"
     else:
         state = "missing"
+
     # Disk space info (best-effort)
+
     try:
         incoming_free_b = get_free_bytes(INCOMING_DIR)
     except Exception:
@@ -1014,6 +1136,8 @@ def status():
         }
     )
 
+# Delete endpoint:
+# removes audio files, transcript sidecars, progress files, and index entries.
 
 @app.post("/delete")
 def delete():
@@ -1021,10 +1145,13 @@ def delete():
     filename = data.get("filename", "")
     filename = sanitize_filename(filename)
 
+    # Build list of all file paths (audio + transcripts + metadata) to delete.
+
     if not filename:
         return jsonify({"error": "missing filename"}), 400
 
-    # Delete from disk
+    # Delete all files associated with this audio item from disk.
+
     base = Path(filename).stem
     paths = [
         Path(INCOMING_DIR) / filename,
@@ -1046,11 +1173,14 @@ def delete():
         except Exception as e:
             return jsonify({"error": f"failed deleting {p}: {e}"}), 500
 
-    # Delete from Meilisearch (best-effort)
+    # Best-effort cleanup of Meilisearch documents associated with this file.
+
     tasks = {}
 
     if MEILI_MASTER_KEY:
+
         # segments: try delete-by-filter; if it fails, fall back to search+delete-batch
+
         try:
             r = requests.post(
                 f"{MEILI_URL}/indexes/{INDEX_SEGMENTS}/documents/delete",
@@ -1065,7 +1195,8 @@ def delete():
         except Exception as e:
             tasks["segments_error"] = str(e)
 
-            # Fallback: search for matching docs, then delete by ids
+            # Fallback: search for matching segment documents and delete them in batches.
+
             try:
                 deleted = 0
                 offset = 0
@@ -1118,7 +1249,10 @@ def delete():
                 tasks["segments_fallback"] = {"deleted": deleted}
             except Exception as e2:
                 tasks["segments_fallback_error"] = str(e2)
+
         # transcripts: delete by id = safe(base)
+        # Delete file-level document using its safe document ID.
+
         try:
             safe_id = safe_id_from_filename(filename)
             r = requests.delete(
@@ -1133,8 +1267,10 @@ def delete():
         except Exception as e:
             tasks["transcripts_error"] = str(e)
 
+    # If Meilisearch reports a task failure, surface it even if disk deletion succeeded.
     # If Meili explicitly failed, surface it as a non-ok response.
     # Disk deletion may still have succeeded; this only reflects index cleanup status.
+
     meili_failed = False
     error_message = None
 
@@ -1165,6 +1301,9 @@ def delete():
 
     return jsonify(response), 200
 
+# Segment edit endpoint:
+# updates a single transcript segment and rewrites transcript files.
+
 @app.post("/edit-segment")
 def edit_segment():
     data = request.get_json(silent=True) or {}
@@ -1176,6 +1315,8 @@ def edit_segment():
     if not filename:
         return jsonify({"error": "missing filename"}), 400
 
+        # Convert startSec to milliseconds for matching against stored segments.
+
     try:
         start_ms = int(round(float(start_sec) * 1000))
     except Exception:
@@ -1183,6 +1324,8 @@ def edit_segment():
 
     if not new_text:
         return jsonify({"error": "empty text"}), 400
+
+        # Resolve file paths for audio and transcript sidecar files.
 
     base = Path(filename).stem
     audio_path = Path(PROCESSED_DIR) / filename
@@ -1192,6 +1335,8 @@ def edit_segment():
 
     if not vtt_path.exists():
         return jsonify({"error": f"missing transcript: {vtt_path.name}"}), 404
+
+        # Load transcript, locate matching segment by start time, and update text.
 
     try:
         vtt_text = vtt_path.read_text(encoding="utf-8")
@@ -1213,6 +1358,8 @@ def edit_segment():
         write_txt_from_segments(txt_path, segments)
 
         meili = {"updated": False}
+
+            # Rebuild Meilisearch documents so edits are reflected in search results.
 
         if MEILI_MASTER_KEY and audio_path.exists():
             try:
@@ -1257,6 +1404,9 @@ def edit_segment():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Clip endpoint:
+# extracts selected transcript segments into a new audio file.
+
 @app.post("/clip")
 def clip_audio():
     try:
@@ -1272,7 +1422,8 @@ def clip_audio():
         if not os.path.exists(input_path):
             return jsonify({"ok": False, "error": "Source file not found"}), 404
 
-        # Build ffmpeg trim filters
+        # Build ffmpeg filter graph to trim and reassemble selected audio ranges.
+
         filter_parts = []
         concat_inputs = []
         for i, r in enumerate(ranges):
@@ -1286,6 +1437,8 @@ def clip_audio():
 
         output_path = make_clip_output_path(filename)
 
+        # Build ffmpeg command to apply trim filters and concatenate segments.
+
         cmd = [
             "ffmpeg",
             "-y",
@@ -1296,6 +1449,8 @@ def clip_audio():
         ]
 
         subprocess.run(cmd, check=True)
+
+        # Return clip either as a direct download or re-import into incoming queue.
 
         if mode == "download":
             return send_file(output_path, as_attachment=True)
@@ -1312,6 +1467,9 @@ def clip_audio():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+# Reindex endpoint:
+# rebuilds Meilisearch indexes from processed files and prevents concurrent runs.
+
 @app.post("/reindex")
 def reindex():
     if not _try_acquire_lock(_REINDEX_LOCK_PATH):
@@ -1324,6 +1482,8 @@ def reindex():
             ),
             409,
         )
+
+        # Run rebuild and update last_reindex timestamp if successful.
 
     try:
         result = rebuild_meili_from_processed()
@@ -1353,6 +1513,9 @@ def reindex():
         except Exception:
             pass
 
+# Index health endpoint:
+# returns storage counts, Meilisearch status, and index consistency warnings.
+
 @app.get("/index-health")
 def index_health():
     summary = {
@@ -1381,6 +1544,8 @@ def index_health():
         "last_reindex": "",
     }
 
+    # Gather local storage statistics and last reindex timestamp.
+
     try:
         processed_dir = Path(PROCESSED_DIR)
         if processed_dir.exists():
@@ -1396,6 +1561,8 @@ def index_health():
         summary["ok"] = False
         summary["storage"]["error"] = str(e)
 
+    # Check if Meilisearch is reachable before attempting index inspection.
+
     try:
         r = _meili_request("GET", "/health", timeout=5)
         r.raise_for_status()
@@ -1404,6 +1571,8 @@ def index_health():
         summary["ok"] = False
         summary["meili"]["error"] = str(e)
         return jsonify(summary), 200
+
+    # Helper function to query index metadata and document counts from Meilisearch.
 
     def inspect_index(uid: str) -> dict:
         info = {
@@ -1426,6 +1595,8 @@ def index_health():
 
         return info
 
+    # Inspect each Meilisearch index to determine existence and document count.
+
     try:
         summary["indexes"]["files"] = inspect_index(INDEX_TRANSCRIPTS)
         summary["indexes"]["segments"] = inspect_index(INDEX_SEGMENTS)
@@ -1440,10 +1611,13 @@ def index_health():
 
     return jsonify(summary), 200
 
+# -----------------------------
+# Settings storage and validation
+# Handles persisted configuration for Whisper, transcript rendering,
+# and Meilisearch behavior.
+# -----------------------------
 
-# -----------------------------
-# Settings (persisted JSON)
-# -----------------------------
+# Settings storage paths for persisted runtime configuration.
 
 SETTINGS_DIR = os.path.join(DATA_DIR, "config")
 SETTINGS_PATH = os.path.join(SETTINGS_DIR, "settings.json")
@@ -1474,6 +1648,7 @@ DEFAULT_SETTINGS = {
     },
 }
 
+# Recursively merges nested dictionaries so saved settings can override defaults.
 
 def _deep_merge(base: dict, overlay: dict) -> dict:
     out = dict(base or {})
@@ -1484,6 +1659,8 @@ def _deep_merge(base: dict, overlay: dict) -> dict:
             out[k] = v
     return out
 
+# Loads settings JSON from disk if present.
+# Returns an empty dict if the file is missing or invalid.
 
 def load_settings() -> dict:
     try:
@@ -1498,6 +1675,7 @@ def load_settings() -> dict:
         print("Settings load error:", str(e), flush=True)
     return {}
 
+# Converts common string and numeric values into booleans for settings validation.
 
 def _coerce_bool(v, default=False) -> bool:
     if isinstance(v, bool):
@@ -1510,6 +1688,8 @@ def _coerce_bool(v, default=False) -> bool:
             return False
     return bool(v) if isinstance(v, (int, float)) else default
 
+# Validates and normalizes persisted settings.
+# Unknown or invalid values are ignored in favor of safe defaults.
 
 def validate_settings(raw: dict) -> dict:
     """
@@ -1656,6 +1836,8 @@ def validate_settings(raw: dict) -> dict:
 
     return cleaned
 
+# Saves settings atomically by writing a temporary file first, then replacing the old file.
+
 def save_settings(settings: dict) -> None:
     import json
 
@@ -1666,6 +1848,8 @@ def save_settings(settings: dict) -> None:
         f.write(payload + "\n")
     os.replace(tmp, SETTINGS_PATH)
 
+# Applies search-related settings to Meilisearch indexes.
+# Used when typo tolerance or synonyms are changed in the UI.
 
 def apply_meili_settings(meili_cfg: dict) -> dict:
     """
@@ -1689,6 +1873,8 @@ def apply_meili_settings(meili_cfg: dict) -> dict:
     results = {}
     applied_all = True
 
+        # Apply the same Meilisearch settings to both indexes used by the UI.
+
     for idx in (INDEX_TRANSCRIPTS, INDEX_SEGMENTS):
         try:
             r = _meili_request(
@@ -1699,15 +1885,20 @@ def apply_meili_settings(meili_cfg: dict) -> dict:
             results[idx] = j
 
             # If we got a task id, try to poll briefly so we can surface failures
+
             task_uid = None
             if isinstance(j, dict):
                 task_uid = j.get("taskUid") or j.get("uid")
             if task_uid is not None:
                 results[f"{idx}_task"] = wait_meili_task(task_uid)
 
+        # Record per-index errors but continue so the caller gets a full summary.
+
         except Exception as e:
             applied_all = False
             results[idx] = {"error": str(e)}
+
+    # Return whether all index updates succeeded along with per-index results.
 
     return {
         "ok": applied_all,
@@ -1716,6 +1907,9 @@ def apply_meili_settings(meili_cfg: dict) -> dict:
         "results": results,
     }
 
+# Settings read endpoint:
+# returns the current validated settings with defaults merged in.
+
 @app.get("/settings")
 def get_settings():
     current = load_settings()
@@ -1723,25 +1917,41 @@ def get_settings():
     merged = validate_settings(merged)
     return jsonify({"ok": True, "settings": merged})
 
+# Settings update endpoint:
+# validates, saves, and applies runtime search settings.
 
 @app.put("/settings")
 def put_settings():
+
+    # Accept either a wrapped payload {"settings": {...}} or a direct settings object.
+
     body = request.get_json(silent=True)
     if body is None:
         return jsonify({"ok": False, "error": "invalid JSON"}), 400
 
-    # Accept either {"settings": {...}} or just {...}
+    # Extract the actual settings object from the request body.
+
     raw = (
         body.get("settings") if isinstance(body, dict) and "settings" in body else body
     )
+
+    # Reject non-object payloads before validation.
+
     if not isinstance(raw, dict):
         return jsonify({"ok": False, "error": "settings must be an object"}), 400
 
+    # Normalize and clamp all supported settings to safe values.
+
     cleaned = validate_settings(raw)
     try:
+
+        # Save validated settings to disk.
+
         save_settings(cleaned)
     except Exception as e:
         return jsonify({"ok": False, "error": f"failed to save settings: {e}"}), 500
+
+    # Apply Meilisearch-related settings so search behavior updates immediately.
 
     meili_apply = apply_meili_settings(cleaned.get("meili") or {})
 
