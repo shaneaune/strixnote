@@ -11,6 +11,9 @@ import contextlib
 import requests
 from faster_whisper import WhisperModel
 
+# Worker filesystem and service configuration.
+# Incoming audio is processed from /data/incoming and outputs are written to /data/processed.
+
 IN_DIR = "/data/incoming"
 PROCESSING_DIR = "/data/incoming/.processing"
 OUT_DIR = "/data/processed"
@@ -34,11 +37,15 @@ STATUS_DIR = "/data/status"
 
 MIN_FREE_BYTES = int(os.environ.get("MIN_FREE_GB", "1")) * 1024 * 1024 * 1024  # default 1 GiB
 
+# Returns available free disk space in bytes.
 
 def get_free_bytes(path: str) -> int:
+
     # Uses the filesystem backing `path`
+
     return shutil.disk_usage(path).free
 
+# Checks if enough free disk space is available before starting new work.
 
 def wait_for_disk_space(path: str, min_free_bytes: int) -> bool:
     """
@@ -57,16 +64,21 @@ def wait_for_disk_space(path: str, min_free_bytes: int) -> bool:
     )
     return False
 
+# Generates a safe filename for per-file progress JSON.
+
 def progress_filename_for(audio_filename: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", audio_filename).strip("._")
     if not safe:
         safe = "file"
     return f"{safe}.progress.json"
 
+# Returns the full path of the progress JSON file for a given audio file.
 
 def progress_path_for(audio_filename: str) -> str:
     return os.path.join(STATUS_DIR, progress_filename_for(audio_filename))
 
+# Writes atomic progress updates to disk so the API/UI can report
+# queue, transcription, indexing, and error state.
 
 def write_progress(
     audio_filename: str,
@@ -103,6 +115,7 @@ def write_progress(
 
     os.replace(tmp_path, final_path)
 
+# Removes any saved progress file for the given audio file.
 
 def remove_progress(audio_filename: str) -> None:
     try:
@@ -111,6 +124,9 @@ def remove_progress(audio_filename: str) -> None:
         pass
     except Exception:
         pass
+
+# Captures progress information emitted by Whisper and converts it into
+# structured progress updates for the UI.
 
 class WhisperProgressCapture:
     def __init__(self, audio_filename: str, audio_duration_s: float, started_at: int):
@@ -183,6 +199,8 @@ class WhisperProgressCapture:
         )
         self._last_write_ts = now_ts
 
+# Loads runtime settings written by the API settings page and returns
+# safe defaults if the file is missing or invalid.
 
 def load_runtime_settings() -> dict:
     """
@@ -225,11 +243,16 @@ def load_runtime_settings() -> dict:
     except Exception as e:
         print(f"Settings load failed, using defaults: {e}", flush=True)
         return defaults
+    
+# Cached settings state used to avoid re-reading settings.json too often.
+
 _LAST_SETTINGS_MTIME = None
 _LAST_SETTINGS_LOAD = 0.0
 _LAST_WHISPER_SETTINGS = {"language": "", "beam_size": 5, "vad_filter": False}
 _SETTINGS_CHECK_INTERVAL_S = 2.0
 
+# Returns cached Whisper runtime settings and reloads settings.json only
+# when the file changes or the cache interval expires.
 
 def get_whisper_settings() -> dict:
     """
@@ -262,6 +285,8 @@ def get_whisper_settings() -> dict:
 
     return _LAST_WHISPER_SETTINGS
 
+# Internal helper for making HTTP requests to Meilisearch.
+
 def meili_request(method: str, path: str, json_body=None, timeout=10):
     url = f"{MEILI_URL}{path}"
     headers = {**meili_headers()}
@@ -269,6 +294,8 @@ def meili_request(method: str, path: str, json_body=None, timeout=10):
         headers["Content-Type"] = "application/json"
     return requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
 
+# Verifies that Meilisearch is reachable and the required indexes exist
+# before the worker begins processing files.
 
 def ensure_meili_ready():
     """
@@ -295,9 +322,13 @@ def ensure_meili_ready():
         else:
             r.raise_for_status()
 
+# Builds request headers for Meilisearch, including optional authorization.
+
 def meili_headers():
     return {"Authorization": f"Bearer {MEILI_MASTER_KEY}"} if MEILI_MASTER_KEY else {}
 
+# Posts documents to Meilisearch with retry and backoff so temporary
+# connection or service issues do not immediately fail the worker.
 
 def meili_post_with_retry(path: str, json_body, timeout=30, retries=5):
     last_err = None
@@ -330,16 +361,22 @@ def meili_post_with_retry(path: str, json_body, timeout=30, retries=5):
             )
 
             # Exponential backoff, capped (1.0s, 2.0s, 4.0s, 8.0s, 10.0s...)
+
             sleep_s = min(10.0, 1.0 * (2 ** (attempt - 1)))
             time.sleep(sleep_s)
 
     # After retries exhausted, raise so caller can handle (worker already catches and continues)
+
     raise last_err
+
+# Converts an arbitrary string into a safe Meilisearch document ID.
 
 def safe_id(s: str) -> str:
     # Meilisearch id must be only [A-Za-z0-9_-]
     return re.sub(r"[^A-Za-z0-9_-]+", "_", s).strip("_") or "doc"
 
+# Returns True only if the file size remains unchanged for a short period.
+# This helps avoid processing files that are still being copied/uploaded.
 
 def is_stable(path: str, seconds: int = 5) -> bool:
     s1 = os.path.getsize(path)
@@ -347,6 +384,7 @@ def is_stable(path: str, seconds: int = 5) -> bool:
     s2 = os.path.getsize(path)
     return s1 == s2
 
+# Uses ffprobe to determine audio duration in seconds.
 
 def probe_duration_seconds(path: str) -> float:
     try:
@@ -370,6 +408,7 @@ def probe_duration_seconds(path: str) -> float:
     except Exception:
         return 0.0
 
+# Writes SRT subtitle output from Whisper segments.
 
 def write_srt(segments, out_path):
     def ts(t):
@@ -386,6 +425,8 @@ def write_srt(segments, out_path):
             f.write(f"{i}\n{ts(seg.start)} --> {ts(seg.end)}\n{seg.text.strip()}\n\n")
 
 
+# Writes WebVTT subtitle output from Whisper segments.
+
 def write_vtt(segments, out_path):
     def ts(t):
         h = int(t // 3600)
@@ -401,6 +442,8 @@ def write_vtt(segments, out_path):
         for seg in segments:
             f.write(f"{ts(seg.start)} --> {ts(seg.end)}\n{seg.text.strip()}\n\n")
 
+# Formats plain transcript text for download by inserting line breaks
+# after sentence-ending punctuation.
 
 def format_txt_for_download(text: str) -> str:
     # Insert a newline after sentence-ending punctuation.
@@ -414,12 +457,14 @@ def format_txt_for_download(text: str) -> str:
 
 _shutdown_requested = False
 
+# Signal handler used for graceful shutdown.
 
 def _handle_shutdown(signum, frame):
     global _shutdown_requested
     print("Shutdown signal received. Finishing current work...", flush=True)
     _shutdown_requested = True
 
+# Register signal handlers so the worker can finish current work and exit cleanly.
 
 signal.signal(signal.SIGTERM, _handle_shutdown)
 signal.signal(signal.SIGINT, _handle_shutdown)
@@ -431,12 +476,16 @@ def main():
     os.makedirs(DONE_DIR, exist_ok=True)
     os.makedirs(FAILED_DIR, exist_ok=True)
 
+    # Load the Whisper model once at startup so files can be processed continuously.
+
     model = WhisperModel(
         MODEL_NAME,
         device=DEVICE,
         compute_type=COMPUTE_TYPE,
         download_root=os.environ.get("WHISPER_MODEL_DIR", "/models"),
     )
+
+    # Refuse to continue if Meilisearch is not ready, since the worker depends on it.
 
     try:
         ensure_meili_ready()
@@ -450,6 +499,9 @@ def main():
         flush=True,
     )
 
+    # Main watch loop:
+    # scans incoming files, transcribes them, writes outputs, and updates Meilisearch.
+
     while not _shutdown_requested:
         for name in sorted(os.listdir(IN_DIR)):
             path = os.path.join(IN_DIR, name)
@@ -461,15 +513,21 @@ def main():
             if ext.lower() not in AUDIO_EXTS:
                 continue
 
+            # Safe base ID used for Meilisearch document IDs.
+
             safe_base = safe_id(base)
 
             txt_path = os.path.join(OUT_DIR, base + ".txt")
             srt_path = os.path.join(OUT_DIR, base + ".srt")
             vtt_path = os.path.join(OUT_DIR, base + ".vtt")
 
+            # Skip files that already have all expected transcript outputs.
+
             if os.path.exists(txt_path) and os.path.exists(srt_path) and os.path.exists(vtt_path):
                 # already processed
                 continue
+
+            # Process one stable audio file at a time.
 
             try:
                 if not is_stable(path, seconds=5):
@@ -479,7 +537,10 @@ def main():
 
             processing_path = None
             try:
-                # Disk space safeguard
+
+                # Before starting work, ensure the output filesystem still has
+                # enough free space to safely continue processing.
+
                 if not wait_for_disk_space(OUT_DIR, MIN_FREE_BYTES):
                     time.sleep(5)
                     continue
@@ -487,8 +548,12 @@ def main():
                 shutil.move(path, processing_path)
                 print(f"Transcribing: {name}", flush=True)
 
+                # Capture basic timing information for progress and ETA reporting.
+
                 started_at = int(time.time())
                 audio_duration_s = probe_duration_seconds(processing_path)
+
+                # Initialize progress tracking before transcription begins.
 
                 write_progress(
                     audio_filename=name,
@@ -500,6 +565,9 @@ def main():
                     started_at=started_at,
                 )
 
+                # Read the latest cached Whisper settings.
+                # These apply to new files only, not jobs already in progress.
+
                 ws = get_whisper_settings()
                 lang = ws["language"]
                 beam = ws["beam_size"]
@@ -510,15 +578,22 @@ def main():
                     flush=True,
                 )
 
+                # Build transcription arguments from the current runtime settings.
+
                 transcribe_kwargs = {"beam_size": beam}
                 if lang:
                     transcribe_kwargs["language"] = lang
+
+                # Capture Whisper progress text from stderr and convert it into
+                # structured progress updates for the UI.
 
                 progress_capture = WhisperProgressCapture(
                     audio_filename=name,
                     audio_duration_s=audio_duration_s,
                     started_at=started_at,
                 )
+
+                # Build optional VAD parameters from the selected runtime preset.
 
                 vad_params = None
 
@@ -535,7 +610,9 @@ def main():
                             "min_speech_duration_ms": 300,
                         }
 
-                # Some faster-whisper builds support vad_filter; if not, retry without it.
+                # Some faster-whisper builds support vad_filter arguments and some do not.
+                # Retry without VAD-specific arguments if the installed build rejects them.
+
                 try:
                     with contextlib.redirect_stderr(progress_capture):
                         if vad_params:
@@ -564,9 +641,14 @@ def main():
                           **transcribe_kwargs,
                       )
 
+                # Collected Whisper segments are stored here before writing outputs.
+
                 seg_list = []
                 next_progress_write = 0.0
                 last_processed_s = 0.0
+
+                # Consume the streaming Whisper segments while periodically updating
+                # progress based on the furthest processed timestamp.
 
                 for seg in segments:
                     seg_list.append(seg)
@@ -615,19 +697,26 @@ def main():
 
                 full_text = " ".join(s.text.strip() for s in seg_list).strip()
 
-                # Write TXT (human-readable lines)
+                # Write plain text transcript output formatted for easy reading / download.
+
                 with open(txt_path, "w", encoding="utf-8") as f:
                     f.write(format_txt_for_download(full_text))
 
-                # Write SRT + VTT (VTT is for HTML5 track)
+                # Write subtitle outputs used by the player and transcript UI.
+
                 write_srt(seg_list, srt_path)
                 write_vtt(seg_list, vtt_path)
+
+                # Save word-level timing output for later UI features.
 
                 words_json_path = os.path.join(OUT_DIR, base + ".words.json")
                 words_payload = {
                     "filename": name,
                     "segments": [],
                 }
+
+                # Preserve word timing data in a sidecar JSON file so the UI can
+                # support pause-aware splitting and more precise transcript behavior.
 
                 for seg in seg_list:
                     seg_words = []
@@ -653,6 +742,9 @@ def main():
                 with open(words_json_path, "w", encoding="utf-8") as f:
                     json.dump(words_payload, f, ensure_ascii=True, indent=2)
 
+                # Switch progress state from transcribing to indexing once transcript
+                # files have been written and search documents are being prepared.
+
                 now = int(time.time())
                 write_progress(
                     audio_filename=name,
@@ -666,7 +758,8 @@ def main():
                 audio_bytes = os.path.getsize(processing_path)
                 duration_s = probe_duration_seconds(processing_path)
 
-                # ---- FILE-LEVEL DOCUMENT (existing behavior preserved) ----
+                # Build the file-level Meilisearch document used for full-transcript search.
+
                 file_doc = {
                     "id": safe_base,
                     "filename": name,
@@ -679,6 +772,8 @@ def main():
 
                 meili_ok = True
 
+                # Index the file-level transcript document first.
+
                 try:
                     meili_post_with_retry(
                         f"/indexes/{FILE_INDEX_NAME}/documents",
@@ -689,7 +784,9 @@ def main():
                     meili_ok = False
                     print(f"WARNING: Meili indexing failed (file doc). Continuing: {e}", flush=True)
 
-                # ---- SEGMENT-LEVEL DOCUMENTS (new behavior) ----
+                # Build per-segment Meilisearch documents so Search can return
+                # individual transcript matches with timestamps.
+
                 segment_docs = []
                 for i, seg in enumerate(seg_list):
                     segment_docs.append(
@@ -704,6 +801,8 @@ def main():
                         }
                     )
 
+                # Only index segment-level documents if file-level indexing succeeded.
+
                 if segment_docs and meili_ok:
                     try:
                         meili_post_with_retry(
@@ -716,9 +815,13 @@ def main():
                             f"WARNING: Meili indexing failed (segment docs). Continuing: {e}",
                             flush=True,
                         )
-                # Move original audio
+
+                # Move the original audio file out of .processing into the processed area.
+
                 shutil.move(processing_path, os.path.join(DONE_DIR, name))
                 processing_path = None
+
+                # Mark the job as fully complete after indexing and file moves finish.
 
                 write_progress(
                     audio_filename=name,
@@ -731,6 +834,9 @@ def main():
                 )
 
                 print(f"Done: {name}", flush=True)
+
+            # On failure, move the audio file into the failed folder and save a small
+            # JSON sidecar with the error details for later troubleshooting.
 
             except Exception as e:
                 print(f"ERROR processing {name}: {e}", flush=True)
@@ -762,8 +868,10 @@ def main():
                             )
                 except Exception:
                     pass
-
+        # Small idle delay to avoid busy-looping while watching the incoming directory.
         time.sleep(2)
+
+# Main worker loop has exited cleanly after receiving a shutdown request.
 
 print("Worker exiting cleanly.", flush=True)
 if __name__ == "__main__":
