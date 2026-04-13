@@ -9,7 +9,7 @@ services:
       - MEILI_NO_ANALYTICS=true
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     volumes:
-      - ./meili_data:/meili_data
+      - ./data/meili:/meili_data
     restart: unless-stopped
 
   upload_api:
@@ -45,7 +45,7 @@ services:
       - HF_HUB_OFFLINE=1
     volumes:
       - ${DATA_DIR}:/data
-      - ./whisper_models:/models
+      - ./data/models:/models
     depends_on:
       - meilisearch
     restart: unless-stopped
