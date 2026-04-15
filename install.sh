@@ -29,6 +29,16 @@ if [ "$READY" -ne 1 ]; then
   exit 1
 fi
 
+echo "Applying Meilisearch schema..."
+./scripts/dc.sh exec -T upload_api python - <<'PY'
+from app import ensure_meili_schema
+import json
+result = ensure_meili_schema()
+print(json.dumps(result, indent=2))
+if not result.get("ok"):
+    raise SystemExit(1)
+PY
+
 # Preload model
 ./scripts/preload-model.sh
 
