@@ -685,11 +685,22 @@ def _try_acquire_lock(path: str) -> bool:
     except Exception:
         # If locking fails for any other reason, fall back to running anyway.
         return True
-
-
+    
+# Retries schema setup for a short time before giving up (allows about 20 seconds)
 if _try_acquire_lock(_LOCK_PATH):
     try:
-        _MEILI_SCHEMA_STATUS = ensure_meili_schema()
+        _MEILI_SCHEMA_STATUS = {"ok": False, "steps": [{"startup": "not run yet"}]}
+        for attempt in range(1, 11):
+            _MEILI_SCHEMA_STATUS = ensure_meili_schema()
+            if _MEILI_SCHEMA_STATUS.get("ok"):
+                break
+            print(
+                f"Meili schema verification not ready yet (attempt {attempt}/10):",
+                _MEILI_SCHEMA_STATUS,
+                flush=True,
+            )
+            time.sleep(2)
+
         print("Meili schema verification:", _MEILI_SCHEMA_STATUS, flush=True)
     except Exception as e:
         print("Meili schema verification failed:", str(e), flush=True)
