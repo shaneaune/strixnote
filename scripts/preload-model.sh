@@ -10,6 +10,7 @@ DEVICE="${WHISPER_DEVICE:-cpu}"
 COMPUTE="${WHISPER_COMPUTE:-int8}"
 
 echo "Preloading Whisper model: ${MODEL} (device=${DEVICE}, compute=${COMPUTE})"
+echo "This may take a few minutes on first run (model download + initialization)..."
 
 DC="./scripts/dc.sh"
 
