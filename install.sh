@@ -12,8 +12,14 @@ echo "=== StrixNote Install ==="
 # Start containers
 ./scripts/dc.sh up -d
 
-echo "Waiting for services to start..."
-sleep 5
+echo "Waiting for Meilisearch to become ready..."
+for i in $(seq 1 30); do
+  if ./scripts/dc.sh exec -T meilisearch /bin/sh -c "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1"; then
+    echo "Meilisearch is ready."
+    break
+  fi
+  sleep 2
+done
 
 # Preload model
 ./scripts/preload-model.sh
