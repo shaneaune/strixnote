@@ -7,6 +7,8 @@ echo "Initializing data directories..."
 
 mkdir -p ./data/incoming
 mkdir -p ./data/processed
+mkdir -p ./data/processed/_failed
+mkdir -p ./data/processed/_broken
 mkdir -p ./data/status
 mkdir -p ./data/config
 mkdir -p ./data/models
