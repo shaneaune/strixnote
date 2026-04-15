@@ -40,6 +40,7 @@ if not result.get("ok"):
 PY
 
 # Preload model
+echo "Preloading Whisper model..."
 ./scripts/preload-model.sh
 
 echo ""
