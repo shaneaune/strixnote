@@ -19,5 +19,32 @@ sleep 5
 ./scripts/preload-model.sh
 
 echo ""
+echo "Container status:"
+./scripts/dc.sh ps
+
+echo "+------------------------------------------------------------------------------+"
+echo "|      /\___/\        ____  _        _      _   _       _                      |"
+echo "|     /  o o  \      / ___|| |_ _ __(_)_  _| \ | | ___ | |_ ___                |"
+echo "|    |   \^/   |     \___ \| __| '__| \ \/ /  \| |/ _ \| __/ _ \               |"
+echo "|    |  (___)  |      ___) | |_| |  | |>  <| |\  | (_) | ||  __/               |"
+echo "|    |  /   \  |     |____/ \__|_|  |_/_/\_\_| \_|\___/ \__\___|               |"
+echo "|    |_/|_|_|\_|                                                               |"
+echo "+------------------------------------------------------------------------------+"
+IP=$(hostname -I | awk '{print $1}')
+
+echo ""
+echo "Container status:"
+./scripts/dc.sh ps
+
+echo ""
 echo "Install complete."
-echo "Open: http://<your-server-ip>:8080"
+
+if [ -n "$IP" ]; then
+  echo "Open StrixNote at: http://$IP:8080"
+else
+  echo "Open StrixNote at: http://<your-server-ip>:8080"
+fi
+
+echo ""
+echo "The Whisper model has been preloaded."
+echo "You can open the page and try your first upload now."
