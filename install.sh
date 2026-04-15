@@ -13,13 +13,21 @@ echo "=== StrixNote Install ==="
 ./scripts/dc.sh up -d
 
 echo "Waiting for Meilisearch to become ready..."
+READY=0
 for i in $(seq 1 30); do
   if ./scripts/dc.sh exec -T meilisearch /bin/sh -c "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1"; then
     echo "Meilisearch is ready."
+    READY=1
     break
   fi
   sleep 2
 done
+
+if [ "$READY" -ne 1 ]; then
+  echo "ERROR: Meilisearch did not become ready."
+  echo "Check logs with: ./scripts/dc.sh logs"
+  exit 1
+fi
 
 # Preload model
 ./scripts/preload-model.sh
