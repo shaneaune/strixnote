@@ -128,7 +128,9 @@ Do not install a desktop environment.
 
 Run the following:
 
+```bash
 su -
+```
 
 ---
 
@@ -136,6 +138,7 @@ su -
 
 Run the following:
 
+```bash
 apt update
 apt upgrade -y
 apt install -y sudo docker.io docker-compose git
@@ -143,6 +146,7 @@ systemctl enable docker
 systemctl start docker
 usermod -aG sudo user
 usermod -aG docker user
+```
 
 Replace "user" with your username if different.
 
@@ -154,10 +158,10 @@ You must log out and reconnect after this step for Docker permissions to take ef
 ### Step 4 - Verify setup
 
 Verify:
-
+```bash
 sudo whoami
 groups
-
+```
 You should see:
 
 * root
@@ -169,9 +173,11 @@ You should see:
 
 Run the following:
 
+```bash
 git clone https://github.com/shaneaune/strixnote.git
 cd strixnote
 ./install.sh
+```
 
 This process may take several minutes on first run.
 
@@ -357,7 +363,9 @@ Your user is not in the `docker` group.
 Fix:
 
 1. Switch to root:
-   su -
+```bash
+su -
+```
 
 2. Run the following:
    usermod -aG docker your_username
@@ -365,8 +373,9 @@ Fix:
 3. Log out completely and reconnect (or reconnect SSH)
 
 4. Verify:
+```bash
    groups
-
+```
 You should see `docker` in the list.
 
 ---
@@ -396,11 +405,13 @@ Cause:
 Fix:
 
 Check container status:
+```bash
 ./scripts/dc.sh ps
-
+```
 Check logs:
+```bash
 ./scripts/dc.sh logs
-
+```
 Ensure Docker is running:
 sudo systemctl status docker
 
@@ -452,12 +463,12 @@ Search index (Meilisearch schema) was not applied.
 Fix:
 
 Run the following:
-
+```bash
 ./scripts/dc.sh exec -T upload_api python - <<EOF
 from app import ensure_meili_schema
 ensure_meili_schema()
 EOF
-
+```
 Then refresh the page.
 
 ---
@@ -483,9 +494,9 @@ Cause:
 * Linux uses RAM for caching
 
 Check actual availability:
-
+```bash
 free -h
-
+```
 If "available" memory is still high, system is operating normally.
 
 ---
@@ -508,13 +519,13 @@ Minimal Debian install does not include sudo.
 Fix:
 
 Switch to root:
-
+```bash
 su -
-
+```
 Install sudo:
-
+```bash
 apt install -y sudo
-
+```
 ---
 
 ### Install commands appear to do nothing after su -
@@ -544,10 +555,10 @@ Free up disk space or expand storage.
 ### Still not working
 
 Collect diagnostic info:
-
+```bash
 ./scripts/dc.sh ps
 ./scripts/dc.sh logs
-
+```
 Include this output when asking for help.
 
 
@@ -622,9 +633,9 @@ The following behaviors are normal during operation:
 * System monitors (such as Proxmox) may report this as high memory usage
 
 To verify actual available memory:
-
+```bash
 free -h
-
+```
 If the "available" value is high, the system is operating normally.
 
 ---
