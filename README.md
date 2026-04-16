@@ -195,8 +195,9 @@ The installer will:
 
 Open in your browser:
 
+```text
 http://<server-ip>:8080
-
+```
 ---
 
 First run:
@@ -319,6 +320,9 @@ All data is stored locally at:
 
 Directory layout:
 
+Directory layout:
+
+```text
 incoming/           - new files waiting to be processed
 processed/          - completed audio and transcripts
 processed/_failed/  - files that failed during processing
@@ -327,6 +331,7 @@ status/             - processing state files
 config/             - application settings
 meili/              - search index database
 models/             - Whisper model files
+```
 
 Notes:
 
@@ -342,7 +347,9 @@ Notes:
 
 You can expose the incoming folder as a network share:
 
+```text
 \\your-server\incoming
+```
 
 Files placed here are processed automatically.
 Refresh the Browse tab to see new files.
@@ -354,8 +361,10 @@ Refresh the Browse tab to see new files.
 
 Error example:
 
+```text
 PermissionError: [Errno 13] Permission denied
 docker.errors.DockerException: Error while fetching server API version
+```
 
 Cause:
 Your user is not in the `docker` group.
@@ -363,6 +372,7 @@ Your user is not in the `docker` group.
 Fix:
 
 1. Switch to root:
+
 ```bash
 su -
 ```
@@ -374,7 +384,7 @@ su -
 
 4. Verify:
 ```bash
-   groups
+groups
 ```
 You should see `docker` in the list.
 
@@ -413,16 +423,19 @@ Check logs:
 ./scripts/dc.sh logs
 ```
 Ensure Docker is running:
+```bash
 sudo systemctl status docker
-
+```
 ---
 
 ### Install appears to hang during model preload
 
 Message:
 
+```text
 Preloading Whisper model...
 Downloading/loading model...
+```
 
 Cause:
 This is normal on first install.
