@@ -107,7 +107,7 @@ Tested on a clean Debian 12 VM.
 
 Recommended VM:
 
-* 4 vCPU
+* 8 vCPU
 * 8 GB RAM minimum (12 GB recommended)
 * 40 GB disk
 
@@ -378,7 +378,9 @@ su -
 ```
 
 2. Run the following:
-   usermod -aG docker your_username
+```bash
+usermod -aG docker your_username
+```
 
 3. Log out completely and reconnect (or reconnect SSH)
 
