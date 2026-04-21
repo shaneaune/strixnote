@@ -65,9 +65,9 @@ echo ""
 echo "Install complete."
 
 if [ -n "$IP" ]; then
-  echo "Open StrixNote at: http://$IP:8080"
+  echo "Open StrixNote at: http://$IP:${STRIXNOTE_WEB_PORT:-8080}"
 else
-  echo "Open StrixNote at: http://<your-server-ip>:8080"
+  echo "Open StrixNote at: http://<your-server-ip>:${STRIXNOTE_WEB_PORT:-8080}"
 fi
 
 echo ""
