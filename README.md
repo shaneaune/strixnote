@@ -101,7 +101,21 @@ If the "available" value is high, the system is operating normally.
 
 ---
 
-## Installation (Debian 12)
+### Installation
+
+## Automated Install (Proxmox)
+
+For the easiest setup, use the Proxmox helper script. This will automatically create a VM and install StrixNote.
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/shaneaune/strixnote-proxmox-helper/main/proxmox-create-strixnote-vm.sh)
+```
+
+Proxmox helper repository:
+https://github.com/shaneaune/strixnote-proxmox-helper
+
+
+## Manual Installation (Debian 12)
 
 Tested on a clean Debian 12 VM.
 
