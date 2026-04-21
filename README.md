@@ -354,6 +354,24 @@ You can expose the incoming folder as a network share:
 Files placed here are processed automatically.
 Refresh the Browse tab to see new files.
 
+## Port Configuration
+
+By default, StrixNote runs on port 8080.
+
+You can change the port by editing the `.env` file before starting:
+
+STRIXNOTE_WEB_PORT=8080
+
+For example, to use port 9090:
+
+STRIXNOTE_WEB_PORT=9090
+
+After changing the port, restart the containers:
+
+```bash
+docker compose down
+docker compose up -d
+```
 
 ## Troubleshooting
 

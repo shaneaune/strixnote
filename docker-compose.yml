@@ -48,7 +48,7 @@ services:
     image: nginx:alpine
     container_name: search_ui
     ports:
-      - "8080:80"
+      - "${STRIXNOTE_WEB_PORT:-8080}:80"
     volumes:
       - ./ui:/usr/share/nginx/html:ro
       - ./ui/default.conf:/etc/nginx/conf.d/default.conf:ro
