@@ -198,6 +198,7 @@ Open in your browser:
 ```text
 http://<server-ip>:8080
 ```
+If you specified another port number in the setup use that port.
 ---
 
 First run:
