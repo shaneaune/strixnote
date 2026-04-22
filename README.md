@@ -212,7 +212,9 @@ Open in your browser:
 ```text
 http://<server-ip>:8080
 ```
+
 If you specified another port number in the setup use that port.
+
 ---
 
 First run:
@@ -373,7 +375,7 @@ Refresh the Browse tab to see new files.
 
 By default, StrixNote runs on port 8080.
 
-You can change the port by editing the `.env` file before starting:
+If you want to change the port after setup you can do so by editing the `.env` file.
 
 STRIXNOTE_WEB_PORT=8080
 
