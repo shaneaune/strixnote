@@ -96,7 +96,9 @@ Memory behavior:
 
 To verify actual available memory, run:
 
+```bash
 free -h
+```
 
 If the "available" value is high, the system is operating normally.
 
@@ -118,7 +120,7 @@ https://github.com/shaneaune/strixnote-proxmox-helper
 
 ## Manual Installation
 
-Tested on a clean Debian 12 VM.
+Tested on a clean Debian 12 and Ubuntu 20.04 VM
 
 Recommended VM:
 
@@ -128,7 +130,7 @@ Recommended VM:
 
 ---
 
-### Step 1 - Install Debian
+### Step 1 - Install Debian Or Ubuntu
 
 Use a minimal install with:
 
@@ -178,7 +180,7 @@ You must log out and reconnect after this step for Docker permissions to take ef
 
 ---
 
-### Step 4 - Verify setup
+### Step 4 - Log back in and verify setup
 
 Verify:
 ```bash
@@ -222,7 +224,7 @@ Open in your browser:
 http://<server-ip>:8080
 ```
 
-If you specified another port number in the setup use that port.
+If you used the proxmox script and specified another port number, use that port.
 
 ---
 
