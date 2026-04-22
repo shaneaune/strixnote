@@ -401,6 +401,30 @@ docker compose down
 docker compose up -d
 ```
 
+## Configuration (.env)
+
+StrixNote uses a `.env` file for configuration.
+
+Some options are available for adjusting behavior such as:
+- Whisper model selection
+- language settings
+- processing parameters
+
+These options are currently not fully tested. If you experiment with them, feedback is appreciated.
+Changing models or processing settings may significantly affect performance and resource usage.
+
+Important:
+Any changes to the `.env` file require rebuilding the containers to take effect.
+
+To apply changes:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+---
+
 ## Troubleshooting
 
 ### Install script fails with Docker permission error
