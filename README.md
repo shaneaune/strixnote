@@ -70,6 +70,7 @@ Recommended:
 Operating systems tested:
 
 * Debian 12
+* Ubuntu 20.04 Server (minimal install)
 
 Other Linux distributions may work but are not officially tested.
 
@@ -105,7 +106,7 @@ If the "available" value is high, the system is operating normally.
 
 ## Automated Install (Proxmox)
 
-For the easiest setup, use the Proxmox helper script. This will automatically create a VM and install StrixNote.
+For the easiest setup, use the Proxmox helper script. This will automatically create a Debian 12 VM and install StrixNote.
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/shaneaune/strixnote-proxmox-helper/main/proxmox-create-strixnote-vm.sh)
@@ -115,7 +116,7 @@ Proxmox helper repository:
 https://github.com/shaneaune/strixnote-proxmox-helper
 
 
-## Manual Installation (Debian 12)
+## Manual Installation
 
 Tested on a clean Debian 12 VM.
 
@@ -142,8 +143,14 @@ Do not install a desktop environment.
 
 Run the following:
 
+Debian:
 ```bash
 su -
+```
+
+Ubuntu:
+```bash
+sudo -i
 ```
 
 ---
@@ -163,6 +170,8 @@ usermod -aG docker user
 ```
 
 Replace "user" with your username if different.
+
+On Ubuntu, you may be prompted to restart services during package installation. Accept the default options.
 
 IMPORTANT:
 You must log out and reconnect after this step for Docker permissions to take effect.
@@ -375,7 +384,7 @@ Refresh the Browse tab to see new files.
 
 By default, StrixNote runs on port 8080.
 
-If you want to change the port after setup you can do so by editing the `.env` file.
+If you want to change the port after setup you can do so by editing the `.env` file located in the main directory.
 
 STRIXNOTE_WEB_PORT=8080
 
