@@ -3,6 +3,12 @@ set -euo pipefail
 
 echo "=== StrixNote Install ==="
 
+# Ensure .env exists
+if [ ! -f .env ]; then
+  echo "Creating .env from .env.example..."
+  cp .env.example .env
+fi
+
 # Check Docker permissions
 ./scripts/check-docker.sh
 
