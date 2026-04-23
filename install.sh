@@ -39,6 +39,9 @@ if ! command -v docker >/dev/null 2>&1 || ! command -v docker-compose >/dev/null
   sudo systemctl start docker
   sudo usermod -aG sudo "$(whoami)"
   sudo usermod -aG docker "$(whoami)"
+
+  echo "Refreshing docker group for current shell..."
+  exec sg docker -c "STRIXNOTE_DOCKER_OK=1 $0 $*"
 fi
 
 # Check Docker permissions
