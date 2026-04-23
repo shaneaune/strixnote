@@ -141,64 +141,13 @@ Do not install a desktop environment.
 
 ---
 
-### Step 2 - Switch to root
-
-Run the following:
-
-Debian:
-```bash
-su -
-```
-
-Ubuntu:
-```bash
-sudo -i
-```
-
----
-
-### Step 3 - Install dependencies
+### Step 2 - Install StrixNote
 
 Run the following:
 
 ```bash
-apt update
-apt upgrade -y
-apt install -y sudo docker.io docker-compose git
-systemctl enable docker
-systemctl start docker
-usermod -aG sudo user
-usermod -aG docker user
-```
-
-Replace "user" with your username if different.
-
-On Ubuntu, you may be prompted to restart services during package installation. Accept the default options.
-
-IMPORTANT:
-You must log out and reconnect after this step for Docker permissions to take effect.
-
----
-
-### Step 4 - Log back in and verify setup
-
-Verify:
-```bash
-sudo whoami
-groups
-```
-You should see:
-
-* root
-* docker listed in groups
-
----
-
-### Step 5 - Install StrixNote
-
-Run the following:
-
-```bash
+sudo apt update
+sudo apt install -y git
 git clone https://github.com/shaneaune/strixnote.git
 cd strixnote
 ./install.sh
@@ -216,7 +165,7 @@ The installer will:
 
 ---
 
-### Step 6 - Open the interface
+### Step 3 - Open the interface
 
 Open in your browser:
 
