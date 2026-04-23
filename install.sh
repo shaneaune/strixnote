@@ -30,6 +30,17 @@ if ! grep -q "^MEILI_MASTER_KEY=" .env; then
   echo "MEILI_MASTER_KEY=$KEY" >> .env
 fi
 
+# Ensure required packages are installed
+if ! command -v docker >/dev/null 2>&1 || ! command -v docker-compose >/dev/null 2>&1; then
+  echo "Installing Docker and required packages..."
+  sudo apt update
+  sudo apt install -y sudo docker.io docker-compose git
+  sudo systemctl enable docker
+  sudo systemctl start docker
+  sudo usermod -aG sudo "$(whoami)"
+  sudo usermod -aG docker "$(whoami)"
+fi
+
 # Check Docker permissions
 ./scripts/check-docker.sh "$0" "$@"
 
