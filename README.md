@@ -394,11 +394,11 @@ For example, to use port 9090:
 
 STRIXNOTE_WEB_PORT=9090
 
-After changing the port, restart the containers:
+After changing the port, restart the containers by running these commands from inside the StrixNote directory:
 
 ```bash
-docker compose down
-docker compose up -d
+./scripts/dc.sh down
+./scripts/dc.sh up -d
 ```
 
 ## Configuration (.env)
@@ -416,11 +416,11 @@ Changing models or processing settings may significantly affect performance and 
 Important:
 Any changes to the `.env` file require rebuilding the containers to take effect.
 
-To apply changes:
+To apply changes, run from inside the StrixNote directory:
 
 ```bash
-docker compose down
-docker compose up -d --build
+./scripts/dc.sh down
+./scripts/dc.sh up -d --build
 ```
 
 ---

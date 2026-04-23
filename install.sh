@@ -9,6 +9,20 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
+# Ensure openssl is available
+if ! command -v openssl >/dev/null 2>&1; then
+  echo "Installing openssl..."
+  sudo apt update
+  sudo apt install -y openssl
+fi
+
+# Ensure MEILI_MASTER_KEY exists
+if ! grep -q "^MEILI_MASTER_KEY=" .env; then
+  echo "Generating Meilisearch master key..."
+  KEY="$(openssl rand -base64 32 | tr -d '\n')"
+  echo "MEILI_MASTER_KEY=$KEY" >> .env
+fi
+
 # Check Docker permissions
 ./scripts/check-docker.sh
 
