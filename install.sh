@@ -16,6 +16,12 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
+# Apply environment overrides
+if [ -n "${STRIXNOTE_WEB_PORT:-}" ]; then
+  echo "Setting STRIXNOTE_WEB_PORT=$STRIXNOTE_WEB_PORT"
+  sed -i "s/^STRIXNOTE_WEB_PORT=.*/STRIXNOTE_WEB_PORT=$STRIXNOTE_WEB_PORT/" .env
+fi
+
 # Ensure openssl is available
 if ! command -v openssl >/dev/null 2>&1; then
   echo "Installing openssl..."

@@ -143,7 +143,10 @@ Do not install a desktop environment.
 
 ### Step 2 - Install StrixNote
 
-Run the following:
+You do not need to install Docker or configure permissions manually.
+The installer handles all required setup automatically.
+
+If Docker is already installed on your system, the installer will detect and reuse the existing installation.
 
 ```bash
 sudo apt update
@@ -153,10 +156,19 @@ cd strixnote
 ./install.sh
 ```
 
+If you want to specify a port other then the default 8080, replace the last line with:
+
+```bash
+STRIXNOTE_WEB_PORT=9090 ./install.sh
+```
+
 This process may take several minutes on first run.
 
 The installer will:
 
+* install Docker and required packages
+* configure permissions automatically
+* create the configuration file (.env)
 * create data directories
 * start containers
 * wait for Meilisearch
@@ -363,7 +375,7 @@ These options are currently not fully tested. If you experiment with them, feedb
 Changing models or processing settings may significantly affect performance and resource usage.
 
 Important:
-Any changes to the `.env` file require rebuilding the containers to take effect.
+Most changes to the `.env` file require rebuilding the containers to take effect.
 
 To apply changes, run from inside the StrixNote directory:
 
@@ -375,51 +387,6 @@ To apply changes, run from inside the StrixNote directory:
 ---
 
 ## Troubleshooting
-
-### Install script fails with Docker permission error
-
-Error example:
-
-```text
-PermissionError: [Errno 13] Permission denied
-docker.errors.DockerException: Error while fetching server API version
-```
-
-Cause:
-Your user is not in the `docker` group.
-
-Fix:
-
-1. Switch to root:
-
-```bash
-su -
-```
-
-2. Run the following:
-```bash
-usermod -aG docker your_username
-```
-
-3. Log out completely and reconnect (or reconnect SSH)
-
-4. Verify:
-```bash
-groups
-```
-You should see `docker` in the list.
-
----
-
-### install.sh stops immediately with a docker group error
-
-Cause:
-Same as above — Docker permissions are not active yet.
-
-Fix:
-Follow the steps above and log out/in before running install again.
-
----
 
 ### Meilisearch did not become ready
 
@@ -532,47 +499,6 @@ Check actual availability:
 free -h
 ```
 If "available" memory is still high, system is operating normally.
-
----
-
-### Docker commands fail inside scripts
-
-Cause:
-User does not have permission to access Docker socket.
-
-Fix:
-Ensure user is in docker group and session has been restarted.
-
----
-
-### No sudo command available
-
-Cause:
-Minimal Debian install does not include sudo.
-
-Fix:
-
-Switch to root:
-```bash
-su -
-```
-Install sudo:
-```bash
-apt install -y sudo
-```
----
-
-### Install commands appear to do nothing after su -
-
-Cause:
-Commands were pasted together with `su -`.
-
-Fix:
-Run commands separately:
-
-1. su -
-2. enter password
-3. then run commands
 
 ---
 
