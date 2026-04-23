@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Prevent recursive sg docker loop
+if [[ "${STRIXNOTE_DOCKER_OK:-}" != "1" ]]; then
+  export STRIXNOTE_DOCKER_OK=1
+else
+  echo "Docker group applied."
+fi
+
 echo "=== StrixNote Install ==="
 
 # Ensure .env exists
@@ -24,7 +31,7 @@ if ! grep -q "^MEILI_MASTER_KEY=" .env; then
 fi
 
 # Check Docker permissions
-./scripts/check-docker.sh
+./scripts/check-docker.sh "$0" "$@"
 
 # Initialize data folders
 ./scripts/init-data.sh
