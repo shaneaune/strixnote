@@ -30,22 +30,45 @@ if ! command -v openssl >/dev/null 2>&1; then
 fi
 
 # Ensure MEILI_MASTER_KEY exists
-if ! grep -q "^MEILI_MASTER_KEY=" .env; then
+if ! grep -Eq "^MEILI_MASTER_KEY=.+$" .env; then
   echo "Generating Meilisearch master key..."
-  KEY="$(openssl rand -base64 32 | tr -d '\n')"
-  echo "MEILI_MASTER_KEY=$KEY" >> .env
+  KEY="$(openssl rand -hex 32)"
+
+  if grep -q "^MEILI_MASTER_KEY=" .env; then
+    # Replace existing (empty or invalid) line safely
+    sed -i "s|^MEILI_MASTER_KEY=.*$|MEILI_MASTER_KEY=$KEY|" .env
+  else
+    # Add cleanly with proper newline
+    printf '\n# Meilisearch\nMEILI_MASTER_KEY=%s\n' "$KEY" >> .env
+  fi
 fi
 
 # Ensure required packages are installed
-if ! command -v docker >/dev/null 2>&1 || ! command -v docker-compose >/dev/null 2>&1; then
+if ! command -v docker >/dev/null 2>&1; then
   echo "Installing Docker and required packages..."
   sudo apt update
-  sudo apt install -y sudo docker.io docker-compose git
+  sudo apt install -y sudo docker.io git
   sudo systemctl enable docker
   sudo systemctl start docker
   sudo usermod -aG sudo "$(whoami)"
   sudo usermod -aG docker "$(whoami)"
+fi
 
+# Ensure Docker Compose is available
+if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
+  echo "Installing Docker Compose..."
+  sudo apt update
+  if apt-cache show docker-compose-v2 >/dev/null 2>&1; then
+    sudo apt install -y docker-compose-v2
+  elif apt-cache show docker-compose-plugin >/dev/null 2>&1; then
+    sudo apt install -y docker-compose-plugin
+  else
+    sudo apt install -y docker-compose
+  fi
+fi
+
+# Refresh docker group for current shell if needed
+if ! groups | grep -qw docker && getent group docker | grep -qw "$(whoami)"; then
   echo "Refreshing docker group for current shell..."
   exec sg docker -c "STRIXNOTE_DOCKER_OK=1 $0 $*"
 fi

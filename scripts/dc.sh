@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-if command -v docker-compose >/dev/null 2>&1; then
+if docker compose version >/dev/null 2>&1; then
+  exec docker compose "$@"
+elif command -v docker-compose >/dev/null 2>&1; then
   exec docker-compose "$@"
 else
-  exec docker compose "$@"
+  echo "ERROR: Neither 'docker compose' nor 'docker-compose' is available."
+  exit 1
 fi
