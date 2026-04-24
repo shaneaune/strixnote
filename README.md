@@ -122,16 +122,16 @@ Recommended specs:
 
 ---
 
-### Ubuntu 20.04 (minimal install)
+### Ubuntu Server (minimal install)
 
 ### Step 1 - Install Ubuntu
 
-Use a minimal install with:
+Use the Server installer with a minimal/default setup.
 
-* SSH server
-* standard system utilities
-
-Do not install a desktop environment.
+During installation:
+* Enable "OpenSSH server"
+* Do not install any additional server packages
+* Do not install a desktop environment
 
 ---
 
@@ -150,7 +150,7 @@ cd strixnote
 ./install.sh
 ```
 
-If you want to specify a port other then the default 8080, replace the last line with:
+If you want to specify a port other than the default 8080, replace the last line with:
 
 ```bash
 STRIXNOTE_WEB_PORT=9090 ./install.sh
@@ -168,6 +168,18 @@ The installer will:
 * wait for Meilisearch
 * apply search schema
 * preload the transcription model
+
+---
+
+### Finish - Open the interface
+
+Open in your browser:
+
+```text
+http://<server-ip>:8080
+```
+
+If you used the proxmox script and specified another port number, use that port.
 
 ---
 
@@ -210,7 +222,11 @@ cd strixnote &&
 '
 ```
 
-If you want to specify a port other then the default 8080, replace the install.sh line with:
+To use a custom port, edit the command inside the block and change:
+
+./install.sh
+
+to:
 
 ```bash
 STRIXNOTE_WEB_PORT=9090 ./install.sh
@@ -248,7 +264,7 @@ If you used the proxmox script and specified another port number, use that port.
 ---
 
 
-First run:
+### First run:
 
 * Upload an audio file
 * Wait for processing
