@@ -94,14 +94,6 @@ Memory behavior:
 - Linux also uses available RAM for filesystem cache
 - Tools like Proxmox may report this cached memory as "used"
 
-To verify actual available memory, run:
-
-```bash
-free -h
-```
-
-If the "available" value is high, the system is operating normally.
-
 ---
 
 ### Installation
@@ -481,24 +473,6 @@ Missing Meilisearch filterable or sortable attributes.
 
 Fix:
 Same as above — reapply schema.
-
----
-
-### High memory usage after install
-
-Observation:
-System may appear to use most available RAM.
-
-Cause:
-
-* Whisper model stays loaded (~3 GB)
-* Linux uses RAM for caching
-
-Check actual availability:
-```bash
-free -h
-```
-If "available" memory is still high, system is operating normally.
 
 ---
 
