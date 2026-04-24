@@ -301,8 +301,6 @@ All data is stored locally at:
 
 Directory layout:
 
-Directory layout:
-
 ```text
 incoming/           - new files waiting to be processed
 processed/          - completed audio and transcripts
@@ -603,8 +601,10 @@ This is expected and only occurs once.
 
 * Files that cannot be processed are moved to:
 
+```text
 /processed/_failed
 /processed/_broken
+```
 
 * These folders are created automatically during installation
 
