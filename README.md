@@ -112,9 +112,9 @@ https://github.com/shaneaune/strixnote-proxmox-helper
 
 ## Manual Installation
 
-Tested on a clean Debian 12 and Ubuntu 20.04 VM
+Tested on a clean Debian 12 VM and Ubuntu 20.04 VM
 
-Recommended VM:
+Recommended specs:
 
 * 8 vCPU
 * 8 GB RAM minimum (12 GB recommended)
@@ -122,7 +122,9 @@ Recommended VM:
 
 ---
 
-### Step 1 - Install Debian Or Ubuntu
+### Ubuntu 20.04 (minimal install)
+
+### Step 1 - Install Ubuntu
 
 Use a minimal install with:
 
@@ -169,7 +171,71 @@ The installer will:
 
 ---
 
-### Step 3 - Open the interface
+### Debian 12.0 (minimal install)
+
+### Step 1 - Install Debian
+
+Use a minimal install with:
+
+* SSH server
+* standard system utilities
+
+Do not install a desktop environment.
+
+---
+
+### Step 2 - Install StrixNote
+
+You do not need to install Docker or configure permissions manually.
+The installer handles all required setup automatically.
+
+If Docker is already installed on your system, the installer will detect and reuse the existing installation.
+
+On a minimal Debian 12 install, `sudo` is not available by default.
+
+Run the following as your normal user (you will be prompted for the root password):
+
+```bash
+su -c '
+apt update &&
+apt install -y sudo git &&
+/usr/sbin/usermod -aG sudo user &&
+echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/strixnote-install &&
+chmod 440 /etc/sudoers.d/strixnote-install &&
+su - user -c "
+git clone https://github.com/shaneaune/strixnote.git &&
+cd strixnote &&
+./install.sh
+"
+'
+```
+
+If you want to specify a port other then the default 8080, replace the install.sh line with:
+
+```bash
+STRIXNOTE_WEB_PORT=9090 ./install.sh
+```
+
+This process may take several minutes on first run.
+
+The installer will:
+
+* install Docker and required packages
+* configure permissions automatically
+* create the configuration file (.env)
+* create data directories
+* start containers
+* wait for Meilisearch
+* apply search schema
+* preload the transcription model
+
+After installation completes, remove the temporary sudo permission:
+
+```bash
+su -c 'rm -f /etc/sudoers.d/strixnote-install'
+```
+
+### Finish - Open the interface
 
 Open in your browser:
 
@@ -180,6 +246,7 @@ http://<server-ip>:8080
 If you used the proxmox script and specified another port number, use that port.
 
 ---
+
 
 First run:
 
