@@ -4287,7 +4287,7 @@ explicitly re-renders or reindexes them.
         // Polls backend processing status for an uploaded file and updates
         // the progress UI, including estimated time and processing phase.
 
-        async function pollProcessing(filename, progressWrap, progressContainer, progressPhase) {
+        async function pollProcessing(filename, progressWrap, progressContainer, progressPhase, labelPrefix = "", hideOnComplete = true) {
           const progressBar = document.getElementById("uploadProgressBar");
           if (!progressBar) {
             console.warn("progressBar not found");
@@ -4364,24 +4364,27 @@ explicitly re-renders or reindexes them.
                     parts.push("estimating time remaining");
                   }
 
-                  progressPhase.textContent = parts.join(" - ");
+                  progressPhase.textContent = `${labelPrefix}${parts.join(" - ")}`;
                 } else if (progress.state === "indexing") {
-                  progressPhase.textContent = `${baseMessage} - elapsed ${formatClock(elapsedSec)}`;
+                  progressPhase.textContent = `${labelPrefix}${baseMessage} - elapsed ${formatClock(elapsedSec)}`;
                 } else {
-                  progressPhase.textContent = baseMessage;
+                  progressPhase.textContent = `${labelPrefix}${baseMessage}`;
                 }
               }
 
               if (data.state === "done") {
                 progressContainer.classList.remove("pulse");
                 progressBar.style.width = "100%";
-                progressPhase.textContent = "Processing complete.";
+                progressPhase.textContent = `${labelPrefix}Processing complete.`;
 
                 refreshBrowseIfVisible();
 
-                setTimeout(() => {
-                  progressWrap.style.display = "none";
-                }, 5000);
+                if (hideOnComplete) {
+                  setTimeout(() => {
+                    progressWrap.style.display = "none";
+                  }, 5000);
+                }
+
                 return;
               }
 
@@ -4544,7 +4547,14 @@ explicitly re-renders or reindexes them.
                     for (let i = 0; i < namesToPoll.length; i++) {
                       const name = namesToPoll[i];
                       progressPhase.textContent = `Processing ${i + 1} of ${namesToPoll.length}: ${name}`;
-                      await pollProcessing(name, progressWrap, progressContainer, progressPhase);
+                      await pollProcessing(
+                        name,
+                        progressWrap,
+                        progressContainer,
+                        progressPhase,
+                        `Processing ${i + 1} of ${namesToPoll.length}: ${name} - `,
+                        i === namesToPoll.length - 1
+                      );
                     }
                   }
                 } else {
@@ -4681,8 +4691,8 @@ explicitly re-renders or reindexes them.
 
     </div>
     <div class="small muted" style="margin:12px 0 6px; text-align:center; opacity:0.85;">
-      StrixNote • Transcription that stays home. • <a href="https://shaneaune.com/strixnote/" target="_blank" rel="noopener"
-        style="color:inherit; text-decoration:none;" onmouseover="this.style.textDecoration='underline'"
+      StrixNote • Transcription that stays home. • <a href="https://shaneaune.com/strixnote/" target="_blank"
+        rel="noopener" style="color:inherit; text-decoration:none;" onmouseover="this.style.textDecoration='underline'"
         onmouseout="this.style.textDecoration='none'">
         shaneaune.com
       </a>
