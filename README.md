@@ -179,7 +179,7 @@ Open in your browser:
 http://<server-ip>:8080
 ```
 
-If you used the proxmox script and specified another port number, use that port.
+If you specified another port number, use that port.
 
 ---
 
@@ -259,7 +259,7 @@ Open in your browser:
 http://<server-ip>:8080
 ```
 
-If you used the proxmox script and specified another port number, use that port.
+If you specified another port number, use that port.
 
 ---
 
