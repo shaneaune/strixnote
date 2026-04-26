@@ -407,6 +407,45 @@ def probe_duration_seconds(path: str) -> float:
         return float(result.stdout.strip())
     except Exception:
         return 0.0
+    
+def probe_media_info(path: str) -> dict:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-print_format", "json",
+                "-show_format",
+                "-show_streams",
+                path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+
+        data = json.loads(result.stdout or "{}")
+        fmt = data.get("format", {})
+        streams = data.get("streams", [])
+
+        audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), {})
+
+        return {
+            "file_size_bytes": int(fmt.get("size", 0)) if fmt.get("size") else 0,
+            "duration_seconds": float(fmt.get("duration", 0)) if fmt.get("duration") else 0.0,
+            "bit_rate": int(fmt.get("bit_rate", 0)) if fmt.get("bit_rate") else 0,
+            "container_format": fmt.get("format_name", ""),
+            "audio": {
+                "codec_name": audio_stream.get("codec_name", ""),
+                "sample_rate": int(audio_stream.get("sample_rate", 0)) if audio_stream.get("sample_rate") else 0,
+                "channels": int(audio_stream.get("channels", 0)) if audio_stream.get("channels") else 0,
+                "channel_layout": audio_stream.get("channel_layout", ""),
+            },
+        }
+
+    except Exception:
+        return {}  
 
 # Writes SRT subtitle output from Whisper segments.
 
@@ -709,9 +748,12 @@ def main():
 
                 # Save word-level timing output for later UI features.
 
+                media_info = probe_media_info(processing_path)
+
                 words_json_path = os.path.join(OUT_DIR, base + ".words.json")
                 words_payload = {
                     "filename": name,
+                    "media_info": media_info,
                     "segments": [],
                 }
 
@@ -759,7 +801,7 @@ def main():
                 duration_s = probe_duration_seconds(processing_path)
 
                 # Build the file-level Meilisearch document used for full-transcript search.
-
+                
                 file_doc = {
                     "id": safe_base,
                     "filename": name,
@@ -768,6 +810,7 @@ def main():
                     "recorded_at": now,  # TODO: replace with real media/filename timestamp when available
                     "audio_bytes": audio_bytes,
                     "duration_s": duration_s,
+                    "media_info": media_info,
                 }
 
                 meili_ok = True
