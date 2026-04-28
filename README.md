@@ -579,8 +579,12 @@ Include this output when asking for help.
 
 ## Updating
 
-Update instructions will be added once versioned releases are available.
+To update an existing StrixNote installation:
 
+```bash
+cd strixnote
+./upgrade.sh
+```
 
 ## Project Status
 
