@@ -39,6 +39,7 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 INCOMING_DIR = os.environ.get("INCOMING_DIR", f"{DATA_DIR}/incoming")
 PROCESSED_DIR = os.environ.get("PROCESSED_DIR", f"{DATA_DIR}/processed")
 STATUS_DIR = os.environ.get("STATUS_DIR", f"{DATA_DIR}/status")
+STRIXNOTE_VERSION = os.environ.get("STRIXNOTE_VERSION", "unknown")
 
   # Generates a temporary output path for audio clips.
 
@@ -148,7 +149,9 @@ def read_progress(filename: str) -> dict | None:
         if not p.exists():
             return None
         with open(p, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            data.setdefault("schema_version", 0)
+            return data
     except Exception:
         return None
     
@@ -1146,6 +1149,13 @@ def status():
             },
         }
     )
+
+# Version endpoint:
+# returns the current StrixNote application version.
+
+@app.get("/version")
+def get_version():
+    return {"version": STRIXNOTE_VERSION}
 
 # Delete endpoint:
 # removes audio files, transcript sidecars, progress files, and index entries.

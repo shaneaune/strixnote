@@ -4687,16 +4687,35 @@ explicitly re-renders or reindexes them.
           await tabBrowse.onclick();
         })();
 
+        // Version display:
+        // Fetches the backend version and updates the footer text.
+
+        async function loadVersion() {
+          try {
+            const res = await fetch("/api/version");
+            const data = await res.json();
+            const el = document.getElementById("appVersion");
+            if (el && data.version) {
+              el.textContent = "v" + data.version;
+            }
+          } catch (e) {
+            console.log("Version fetch failed", e);
+          }
+        }
+
+        // Run on page load
+        document.addEventListener("DOMContentLoaded", loadVersion);
+
       </script>
 
-    </div>
-    <div class="small muted" style="margin:12px 0 6px; text-align:center; opacity:0.85;">
-      StrixNote • Transcription that stays home. • <a href="https://shaneaune.com/strixnote/" target="_blank"
-        rel="noopener" style="color:inherit; text-decoration:none;" onmouseover="this.style.textDecoration='underline'"
-        onmouseout="this.style.textDecoration='none'">
-        shaneaune.com
-      </a>
-    </div>
+      <div class="small muted" style="margin:12px 0 6px; text-align:center; opacity:0.85;">
+        StrixNote <span id="appVersion">v...</span> • Transcription that stays home. •
+        <a href="https://shaneaune.com/strixnote/" target="_blank" rel="noopener"
+          style="color:inherit; text-decoration:none;" onmouseover="this.style.textDecoration='underline'"
+          onmouseout="this.style.textDecoration='none'">
+          shaneaune.com
+        </a>
+      </div>
 </body>
 
 </html>

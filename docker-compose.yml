@@ -14,6 +14,7 @@ services:
     build: ./api
     container_name: upload_api
     environment:
+      - STRIXNOTE_VERSION=1.2.0
       - DATA_DIR=/data
       - INCOMING_DIR=/data/incoming
       - PROCESSED_DIR=/data/processed

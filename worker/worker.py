@@ -752,6 +752,7 @@ def main():
 
                 words_json_path = os.path.join(OUT_DIR, base + ".words.json")
                 words_payload = {
+                    "schema_version": 1,
                     "filename": name,
                     "media_info": media_info,
                     "segments": [],
