@@ -109,6 +109,10 @@ if not result.get("ok"):
     raise SystemExit(1)
 PY
 
+# Run maigration script
+echo "Running data migrations..."
+./scripts/dc.sh exec -T upload_api python /app_host/scripts/migrate.py || true
+
 # Preload model
 echo "Preloading Whisper model..."
 ./scripts/preload-model.sh

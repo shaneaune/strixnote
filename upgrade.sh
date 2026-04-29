@@ -25,6 +25,9 @@ echo "Rebuilding and restarting containers..."
 ./scripts/dc.sh down
 ./scripts/dc.sh up -d --build
 
+echo "Running data migrations..."
+./scripts/dc.sh exec -T upload_api python /app_host/scripts/migrate.py || true
+
 echo
 echo "Container status:"
 ./scripts/dc.sh ps

@@ -24,6 +24,7 @@ services:
       - INDEX_SEGMENTS=segments
     volumes:
       - ${DATA_DIR:-./data}:/data
+      - ./:/app_host
     depends_on:
       - meilisearch
     restart: unless-stopped
