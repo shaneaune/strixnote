@@ -338,6 +338,11 @@ explicitly re-renders or reindexes them.
             <div>Segments index: Not checked yet</div>
             <div>Files index match: Not checked yet</div>
             <div>Last reindex: Never</div>
+
+            <div id="appVersionStatus">App version: loading...</div>
+            <div id="indexVersionStatus">Search index version: loading...</div>
+            <div id="migrationStatus">Last migration: loading...</div>
+
           </div>
 
           <div class="row" style="gap:10px; margin-top:14px; align-items:center;">
@@ -664,19 +669,23 @@ explicitly re-renders or reindexes them.
                 reindexBtn.title = "";
               }
             }
-
             indexHealthBox.innerHTML = `
-                <div>MeiliSearch: ${meiliOk ? "OK" : "Unavailable"}</div>
-                <div>Processed audio files: ${processedCount}</div>
-                <div>Files index: ${files.exists ? `${files.count ?? 0} documents` : "Missing"}</div>
-                <div>Segments index: ${segments.exists ? `${segments.count ?? 0} segments` : "Missing"}</div>
-                <div style="${filesMismatch ? 'color:#ff6b6b;font-weight:600;' : ''}">
-                  Files index match: ${filesMismatch ? "WARNING - index count does not match processed files" : "OK"}
-                </div>
-                <div style="${!data.last_reindex ? 'color:#ff6b6b;font-weight:600;' : ''}">
-                  Last reindex: ${data.last_reindex || "Unknown"}
-                </div>
-              `;
+              <div>MeiliSearch: ${meiliOk ? "OK" : "Unavailable"}</div>
+              <div>Processed audio files: ${processedCount}</div>
+              <div>Files index: ${files.exists ? `${files.count ?? 0} documents` : "Missing"}</div>
+              <div>Segments index: ${segments.exists ? `${segments.count ?? 0} segments` : "Missing"}</div>
+              <div style="${filesMismatch ? 'color:#ff6b6b;font-weight:600;' : ''}">
+                Files index match: ${filesMismatch ? "WARNING - index count does not match processed files" : "OK"}
+              </div>
+              <div style="${!data.last_reindex ? 'color:#ff6b6b;font-weight:600;' : ''}">
+                Last reindex: ${data.last_reindex || "Unknown"}
+              </div>
+              <div id="appVersionStatus">App version: loading...</div>
+              <div id="indexVersionStatus">Search index version: loading...</div>
+              <div id="migrationStatus">Last migration: loading...</div>
+            `;
+
+            loadSystemStatus();
           } catch (e) {
             indexHealthBox.innerHTML = `
               <div>MeiliSearch: Error</div>
@@ -4705,6 +4714,39 @@ explicitly re-renders or reindexes them.
 
         // Run on page load
         document.addEventListener("DOMContentLoaded", loadVersion);
+        document.addEventListener("DOMContentLoaded", loadSystemStatus);
+
+        // Loads index version and migration status into the Settings panel
+        async function loadSystemStatus() {
+          try {
+            // Index version
+            const iv = await fetch("/api/index-version");
+            const ivData = await iv.json();
+            const ivEl = document.getElementById("indexVersionStatus");
+            if (ivEl && ivData.index_version) {
+              ivEl.textContent = "Search index version: " + ivData.index_version;
+            }
+
+            // Migration status
+            const ms = await fetch("/api/migration-status");
+            const msData = await ms.json();
+            const msEl = document.getElementById("migrationStatus");
+            if (msEl && msData.status) {
+              msEl.textContent = "Last migration: " + msData.status.replace("Migration complete. ", "");
+            }
+
+            // App version (reuse existing endpoint)
+            const av = await fetch("/api/version");
+            const avData = await av.json();
+            const avEl = document.getElementById("appVersionStatus");
+            if (avEl && avData.version) {
+              avEl.textContent = "App version: v" + avData.version;
+            }
+
+          } catch (e) {
+            console.log("System status fetch failed", e);
+          }
+        }
 
       </script>
 

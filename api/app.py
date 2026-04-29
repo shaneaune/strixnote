@@ -1157,6 +1157,38 @@ def status():
 def get_version():
     return {"version": STRIXNOTE_VERSION}
 
+# Index version endpoint:
+# returns the current search index version.
+
+@app.get("/index-version")
+def get_index_version():
+    path = Path(STATUS_DIR) / "index_version"
+    try:
+        if path.exists():
+            version = path.read_text(encoding="utf-8").strip()
+        else:
+            version = "0"
+    except Exception:
+        version = "unknown"
+
+    return {"index_version": version}
+
+# Migration status endpoint:
+# returns the last migration summary line.
+
+@app.get("/migration-status")
+def get_migration_status():
+    path = Path(STATUS_DIR) / "migrations.log"
+    try:
+        if not path.exists():
+            return {"status": "No migration log found."}
+
+        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        summary = next((line for line in reversed(lines) if line.startswith("Migration complete.")), "No migration summary found.")
+        return {"status": summary}
+    except Exception:
+        return {"status": "unknown"}
+
 # Delete endpoint:
 # removes audio files, transcript sidecars, progress files, and index entries.
 
