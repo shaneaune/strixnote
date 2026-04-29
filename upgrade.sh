@@ -28,6 +28,9 @@ echo "Rebuilding and restarting containers..."
 echo "Running data migrations..."
 ./scripts/dc.sh exec -T upload_api python /app_host/scripts/migrate.py || true
 
+echo "Checking search index version..."
+./scripts/index-version.sh
+
 echo
 echo "Container status:"
 ./scripts/dc.sh ps
