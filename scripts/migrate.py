@@ -4,8 +4,15 @@ from pathlib import Path
 
 DATA_DIR = Path("/data")
 PROCESSED_DIR = DATA_DIR / "processed"
+STATUS_DIR = DATA_DIR / "status"
+MIGRATION_LOG = STATUS_DIR / "migrations.log"
 CURRENT_SCHEMA_VERSION = 1
 
+STATUS_DIR.mkdir(parents=True, exist_ok=True)
+
+def log_message(message: str) -> None:
+    with MIGRATION_LOG.open("a", encoding="utf-8") as f:
+        f.write(message + "\n")
 
 def migrate_words_json(path: Path) -> bool:
     try:
@@ -36,6 +43,7 @@ def migrate_words_json(path: Path) -> bool:
 
 def main() -> None:
     print("Running StrixNote migrations...")
+    log_message("=== Migration run start ===")
 
     if not PROCESSED_DIR.exists():
         print("No processed directory found. Nothing to migrate.")
@@ -49,8 +57,10 @@ def main() -> None:
         if migrate_words_json(path):
             migrated += 1
 
-    print(f"Migration complete. Checked {checked} files, migrated {migrated} files.")
-
+    summary = f"Migration complete. Checked {checked} files, migrated {migrated} files."
+    print(summary)
+    log_message(summary)
+    log_message("=== Migration run end ===")
 
 if __name__ == "__main__":
     main()
