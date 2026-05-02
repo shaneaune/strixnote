@@ -113,6 +113,10 @@ PY
 echo "Running data migrations..."
 ./scripts/dc.sh exec -T upload_api python /app_host/scripts/migrate.py || true
 
+# initialize index version
+echo "Checking search index version..."
+./scripts/index-version.sh
+
 # Preload model
 echo "Preloading Whisper model..."
 ./scripts/preload-model.sh
