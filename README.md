@@ -70,7 +70,7 @@ Recommended:
 Operating systems tested:
 
 * Debian 12
-* Ubuntu 20.04 Server (minimal install)
+* Ubuntu 22.04 Server (minimal install)
 
 Other Linux distributions may work but are not officially tested.
 
@@ -112,7 +112,7 @@ https://github.com/shaneaune/strixnote-proxmox-helper
 
 ## Manual Installation
 
-Tested on a clean Debian 12 VM and Ubuntu 20.04 VM
+Tested on a clean Debian 12 VM and Ubuntu 22.04 VM
 
 Recommended specs:
 
@@ -202,6 +202,8 @@ You do not need to install Docker or configure permissions manually.
 The installer handles all required setup automatically.
 
 If Docker is already installed on your system, the installer will detect and reuse the existing installation.
+
+StrixNote runs in its own isolated containers and will not modify existing Docker workloads.
 
 On a minimal Debian 12 install, `sudo` is not available by default.
 
@@ -585,6 +587,10 @@ To update an existing StrixNote installation:
 cd strixnote
 ./upgrade.sh
 ```
+
+Before upgrading, it is recommended to back up the data directory.
+
+The data directory contains uploaded audio, transcripts, settings, search data, and migration status.
 
 ## Project Status
 
