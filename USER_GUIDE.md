@@ -362,7 +362,7 @@ Selecting a bookmarked segment opens the transcript viewer directly at the selec
 
 ## Managing Bookmarks
 
-Bookmarks can be removed at any time using the Star bookmark button.
+Bookmarks can be removed at any time using the bookmark button or the star in the transcript view.
 
 Deleting a transcript automatically removes all associated bookmarks.
 
@@ -622,7 +622,8 @@ After modifying the `.env` file, restart the affected containers for changes to 
 Example:
 
 ```bash
-docker compose restart transcribe_worker
+./scripts/dc.sh down
+./scripts/dc.sh up -d
 ```
 
 Some configuration changes may require a full container restart.
@@ -810,23 +811,41 @@ After changing Whisper model, device, or compute settings, restart the transcrip
 Example:
 
 ```bash
-docker compose restart transcribe_worker
+./scripts/dc.sh down
+./scripts/dc.sh up -d
 ```
 
 ---
 
 ## Failed and Broken Files
 
-Files that repeatedly fail transcription are automatically moved to the failed or broken folders.
+If a transcription job repeatedly fails, the audio file may be moved to the Failed or Broken folders for troubleshooting.
 
 Common causes include:
 
-- Corrupted audio files
-- Unsupported codecs
-- Incomplete uploads
+- Unsupported or corrupted audio files
+- Insufficient system resources
 - FFmpeg processing failures
+- Interrupted transcription jobs
 
-These files can be manually reviewed or reprocessed later.
+### Checking Container Logs
+
+Container logs can be viewed to help identify processing or transcription errors.
+
+View live logs with:
+
+```bash
+./scripts/dc.sh logs -f
+```
+
+Press `Ctrl + C` to stop viewing logs.
+
+Logs may help diagnose:
+
+- Failed transcription jobs
+- Search indexing problems
+- FFmpeg issues
+- Container startup failures
 
 ---
 
@@ -857,18 +876,3 @@ Important data to back up includes:
 Regular backups are recommended for production systems.
 
 ---
-
-## Logs and Troubleshooting
-
-Container logs can be viewed using:
-
-```bash
-docker compose logs -f
-```
-
-Logs may help diagnose:
-
-- Failed transcription jobs
-- Search indexing problems
-- FFmpeg issues
-- Container startup failures
