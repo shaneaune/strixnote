@@ -605,7 +605,7 @@ Re-indexing is only recommended if search results appear incorrect, incomplete, 
 
 # Advanced Configuration
 
-The advanced configuration section covers optional settings and internal behavior intended for advanced users and self-hosted deployments.
+The advanced configuration section covers optional settings and internal behavior intended for advanced users.
 
 Most users will not need to modify these settings.
 
@@ -873,6 +873,6 @@ Important data to back up includes:
 - Configuration files
 - `.env` file
 
-Regular backups are recommended for production systems.
+Regular backups are recommended.
 
 ---
