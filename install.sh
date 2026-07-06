@@ -17,10 +17,10 @@ if [ ! -f .env ]; then
 fi
 
 # Apply environment overrides
-if [ -n "${STRIXNOTE_WEB_PORT:-}" ]; then
-  echo "Setting STRIXNOTE_WEB_PORT=$STRIXNOTE_WEB_PORT"
-  sed -i "s/^STRIXNOTE_WEB_PORT=.*/STRIXNOTE_WEB_PORT=$STRIXNOTE_WEB_PORT/" .env
-fi
+WEB_PORT="${STRIXNOTE_WEB_PORT:-8080}"
+
+echo "Setting STRIXNOTE_WEB_PORT=$WEB_PORT"
+sed -i "s/^STRIXNOTE_WEB_PORT=.*/STRIXNOTE_WEB_PORT=$WEB_PORT/" .env
 
 # Ensure openssl is available
 if ! command -v openssl >/dev/null 2>&1; then
