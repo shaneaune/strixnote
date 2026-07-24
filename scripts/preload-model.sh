@@ -5,19 +5,12 @@ cd "$(dirname "$0")/.."
 
 mkdir -p ./data/models
 
-MODEL="${WHISPER_MODEL:-medium.en}"
-DEVICE="${WHISPER_DEVICE:-cpu}"
-COMPUTE="${WHISPER_COMPUTE:-int8}"
-
-echo "Preloading Whisper model: ${MODEL} (device=${DEVICE}, compute=${COMPUTE})"
+echo "Preloading Whisper model using the configuration from .env"
 echo "This may take a few minutes on first run (model download + initialization)..."
 
 DC="./scripts/dc.sh"
 
 $DC run --rm \
-  -e WHISPER_MODEL="${MODEL}" \
-  -e WHISPER_DEVICE="${DEVICE}" \
-  -e WHISPER_COMPUTE="${COMPUTE}" \
   -e HF_HUB_OFFLINE=0 \
   transcribe_worker \
   python - <<'PY'
