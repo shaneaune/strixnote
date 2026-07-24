@@ -208,8 +208,16 @@ def load_runtime_settings() -> dict:
     Returns dict with defaults if file missing/bad.
     """
     defaults = {
-        "whisper": {"language": "", "beam_size": 5, "vad_filter": False},
-        "meili": {"typo_tolerance": True, "synonyms": {}},
+        "whisper": {
+            "language": "",
+            "beam_size": 5,
+            "vad_filter": False,
+            "vad_mode": "off",
+        },
+        "meili": {
+            "typo_tolerance": True,
+            "synonyms": {},
+        },
     }
 
     try:
@@ -232,13 +240,25 @@ def load_runtime_settings() -> dict:
 
         vad = bool(w.get("vad_filter", False))
 
+        vad_mode = str(w.get("vad_mode") or "off").strip().lower()
+        if vad_mode not in ("off", "conservative", "balanced", "aggressive", "noisy"):
+            vad_mode = "off"        
+
         # Keep meili in case we want it later in worker (not used yet)
         tt = bool(m.get("typo_tolerance", True))
         syn = m.get("synonyms") if isinstance(m.get("synonyms"), dict) else {}
 
         return {
-            "whisper": {"language": lang, "beam_size": beam, "vad_filter": vad},
-            "meili": {"typo_tolerance": tt, "synonyms": syn},
+            "whisper": {
+                "language": lang,
+                "beam_size": beam,
+                "vad_filter": vad,
+                "vad_mode": vad_mode,
+            },
+            "meili": {
+                "typo_tolerance": tt,
+                "synonyms": syn,
+            },
         }
     except Exception as e:
         print(f"Settings load failed, using defaults: {e}", flush=True)
@@ -248,7 +268,12 @@ def load_runtime_settings() -> dict:
 
 _LAST_SETTINGS_MTIME = None
 _LAST_SETTINGS_LOAD = 0.0
-_LAST_WHISPER_SETTINGS = {"language": "", "beam_size": 5, "vad_filter": False}
+_LAST_WHISPER_SETTINGS = {
+    "language": "",
+    "beam_size": 5,
+    "vad_filter": False,
+    "vad_mode": "off",
+}
 _SETTINGS_CHECK_INTERVAL_S = 2.0
 
 # Returns cached Whisper runtime settings and reloads settings.json only
@@ -613,7 +638,10 @@ def main():
                 vad = ws["vad_filter"]
                 vad_mode = ws.get("vad_mode", "off")
                 print(
-                    f"Whisper settings: language={(lang or 'auto')} beam_size={beam} vad_filter={vad}",
+                    f"Whisper settings: language={(lang or 'auto')} "
+                    f"beam_size={beam} "
+                    f"vad_filter={vad} "
+                    f"vad_mode={vad_mode}",
                     flush=True,
                 )
 
