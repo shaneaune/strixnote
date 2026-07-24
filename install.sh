@@ -10,10 +10,35 @@ fi
 
 echo "=== StrixNote Install ==="
 
+GPU_MODE=0
+
+if [[ "${1:-}" == "--gpu" ]]; then
+    GPU_MODE=1
+    echo "Installation mode: NVIDIA GPU"
+elif [[ $# -gt 0 ]]; then
+    echo "Usage: $0 [--gpu]"
+    exit 1
+else
+    echo "Installation mode: CPU"
+fi
+
 # Ensure .env exists
 if [ ! -f .env ]; then
   echo "Creating .env from .env.example..."
   cp .env.example .env
+fi
+
+# Configure Whisper defaults for GPU installs
+if [ "$GPU_MODE" -eq 1 ]; then
+  echo "Configuring Whisper for NVIDIA GPU..."
+  sed -i "s/^WHISPER_DEVICE=.*/WHISPER_DEVICE=cuda/" .env
+  sed -i "s/^WHISPER_COMPUTE=.*/WHISPER_COMPUTE=float16/" .env
+
+  if grep -q "^STRIXNOTE_GPU=" .env; then
+    sed -i "s/^STRIXNOTE_GPU=.*/STRIXNOTE_GPU=1/" .env
+  else
+    echo "STRIXNOTE_GPU=1" >> .env
+  fi
 fi
 
 # Apply environment overrides
