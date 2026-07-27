@@ -252,14 +252,21 @@ if [ "$GPU_MODE" -eq 1 ]; then
       }' /etc/apt/sources.list
     fi
 
-    sudo apt update
-    sudo apt install -y \
-      "linux-headers-$(uname -r)" \
-      dkms \
-      nvidia-driver \
-      firmware-misc-nonfree
+      sudo apt update
+      sudo apt install -y \
+        linux-image-cloud-amd64 \
+        linux-headers-cloud-amd64 \
+        dkms \
+        nvidia-driver \
+        firmware-misc-nonfree
 
     complete_checkpoint "gpu-driver-installed"
+
+    if [ "$HELPER_MODE" -eq 1 ]; then
+      echo "A reboot is required to load the new kernel and NVIDIA driver."
+      echo "Requesting an automatic reboot from the Proxmox helper."
+      exit 100
+    fi
   fi
 
   if ! stage_is_complete "gpu-awaiting-proxmox"; then
