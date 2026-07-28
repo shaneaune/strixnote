@@ -270,9 +270,6 @@ keyboard-configuration keyboard-configuration/modelcode string pc105
 keyboard-configuration keyboard-configuration/variantcode string
 EOF
 
-      sudo dpkg --configure -a
-      sudo dpkg-reconfigure -f noninteractive console-setup
-
       sudo apt-get update
       sudo apt-get install -y \
         linux-image-cloud-amd64 \
