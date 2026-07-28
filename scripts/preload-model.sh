@@ -13,7 +13,7 @@ DC="./scripts/dc.sh"
 $DC run --rm \
   -e HF_HUB_OFFLINE=0 \
   transcribe_worker \
-  python - <<'PY'
+  python3 - <<'PY'
 import os
 from faster_whisper import WhisperModel
 
