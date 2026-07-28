@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+trap 'echo; echo "ERROR: Command failed on line $LINENO"; echo "Command: $BASH_COMMAND"; echo "Exit code: $?";' ERR
 
 # Prevent recursive sg docker loop
 if [[ "${STRIXNOTE_DOCKER_OK:-}" != "1" ]]; then
@@ -149,7 +152,7 @@ fi
 if [ "$GPU_MODE" -eq 1 ]; then
   echo "Configuring Whisper for NVIDIA GPU..."
   sed -i "s/^WHISPER_DEVICE=.*/WHISPER_DEVICE=cuda/" .env
-  sed -i "s/^WHISPER_COMPUTE=.*/WHISPER_COMPUTE=float16/" .env
+  sed -i "s/^WHISPER_COMPUTE=.*/WHISPER_COMPUTE=int8/" .env
 
   if grep -q "^STRIXNOTE_GPU=" .env; then
     sed -i "s/^STRIXNOTE_GPU=.*/STRIXNOTE_GPU=1/" .env
