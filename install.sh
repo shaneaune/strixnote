@@ -2,7 +2,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-trap 'echo; echo "ERROR: Command failed on line $LINENO"; echo "Command: $BASH_COMMAND"; echo "Exit code: $?";' ERR
+trap 'exit_code=$?; failed_command=$BASH_COMMAND; echo; echo "ERROR: Command failed on line $LINENO"; echo "Command: $failed_command"; echo "Exit code: $exit_code";' ERR
 
 # Prevent recursive sg docker loop
 if [[ "${STRIXNOTE_DOCKER_OK:-}" != "1" ]]; then
@@ -180,8 +180,8 @@ sed -i "s/^STRIXNOTE_WEB_PORT=.*/STRIXNOTE_WEB_PORT=$WEB_PORT/" .env
 # Ensure openssl is available
 if ! command -v openssl >/dev/null 2>&1; then
   echo "Installing openssl..."
-  sudo apt update
-  sudo apt install -y openssl
+  sudo apt-get update
+  sudo apt-get install -y openssl
 fi
 
 # Ensure MEILI_MASTER_KEY exists
@@ -201,8 +201,8 @@ fi
 # Ensure required packages are installed
 if ! command -v docker >/dev/null 2>&1; then
   echo "Installing Docker and required packages..."
-  sudo apt update
-  sudo apt install -y sudo docker.io git curl gpg pciutils mokutil
+  sudo apt-get update
+  sudo apt-get install -y sudo docker.io git curl gpg pciutils mokutil
   sudo systemctl enable docker
   sudo systemctl start docker
   sudo usermod -aG sudo "$(whoami)"
@@ -212,13 +212,13 @@ fi
 # Ensure Docker Compose is available
 if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
   echo "Installing Docker Compose..."
-  sudo apt update
+  sudo apt-get update
   if apt-cache show docker-compose-v2 >/dev/null 2>&1; then
-    sudo apt install -y docker-compose-v2
+    sudo apt-get install -y docker-compose-v2
   elif apt-cache show docker-compose-plugin >/dev/null 2>&1; then
-    sudo apt install -y docker-compose-plugin
+    sudo apt-get install -y docker-compose-plugin
   else
-    sudo apt install -y docker-compose
+    sudo apt-get install -y docker-compose
   fi
 fi
 
@@ -255,8 +255,26 @@ if [ "$GPU_MODE" -eq 1 ]; then
       }' /etc/apt/sources.list
     fi
 
-      sudo apt update
-      sudo apt install -y \
+      # Prevent console-setup from prompting during unattended installs
+      sudo debconf-set-selections <<'EOF'
+console-setup console-setup/charmap47 select UTF-8
+console-setup console-setup/codeset47 select Guess optimal character set
+console-setup console-setup/codesetcode string guess
+console-setup console-setup/fontface47 select Fixed
+console-setup console-setup/fontsize string 8x16
+console-setup console-setup/fontsize-fb47 select 8x16
+console-setup console-setup/fontsize-text47 select 8x16
+console-setup console-setup/store_defaults_in_debconf_db boolean true
+keyboard-configuration keyboard-configuration/layoutcode string us
+keyboard-configuration keyboard-configuration/modelcode string pc105
+keyboard-configuration keyboard-configuration/variantcode string
+EOF
+
+      sudo dpkg --configure -a
+      sudo dpkg-reconfigure -f noninteractive console-setup
+
+      sudo apt-get update
+      sudo apt-get install -y \
         linux-image-cloud-amd64 \
         linux-headers-cloud-amd64 \
         dkms \
@@ -372,8 +390,8 @@ if [ "$GPU_MODE" -eq 1 ]; then
       sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' |
       sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
 
-    sudo apt update
-    sudo apt install -y nvidia-container-toolkit
+    sudo apt-get update
+    sudo apt-get install -y nvidia-container-toolkit
 
     echo "Configuring the NVIDIA runtime for Docker..."
     sudo nvidia-ctk runtime configure --runtime=docker
