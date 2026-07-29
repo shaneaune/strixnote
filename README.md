@@ -215,6 +215,8 @@ Viewing transcripts:
 * Click Transcript to view text
 * Click a segment to jump to that point
 
+---
+
 Segment tools:
 
 * Copy
@@ -486,6 +488,7 @@ Collect diagnostic info:
 ```
 Include this output when asking for help.
 
+---
 
 ## Updating
 
@@ -499,6 +502,8 @@ cd strixnote
 Before upgrading, it is recommended to back up the data directory.
 
 The data directory contains uploaded audio, transcripts, settings, search data, and migration status.
+
+---
 
 ## Project Status
 
@@ -563,10 +568,13 @@ The current focus is on polish, usability, and preparing for broader use.
 
 The following behaviors are normal during operation:
 
+
 ### Automatic Reboot During Installation
 
 During a GPU installation, the virtual machine will automatically reboot after the NVIDIA driver is installed.
 The Proxmox Helper Script will wait for the VM to come back online and automatically resume the installation.
+
+---
 
 ### High memory usage
 
