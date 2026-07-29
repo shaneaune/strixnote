@@ -11,6 +11,15 @@
 Self-hosted audio transcription with search, playback, and editing.
 Fully local, no cloud required.
 
+> [!NOTE]
+> **Experimental GPU Branch**
+>
+> This branch contains the current development version of NVIDIA GPU acceleration for StrixNote. It is intended for testing and hardware compatibility validation.
+>
+> GPU installation is currently supported only through the matching Proxmox Helper Script on the `feature/gpu-acceleration` branch.
+>
+> For the stable CPU-only release, use the `main` branch.
+
 ## Overview
 
 StrixNote is a self-hosted audio transcription system that converts audio files into searchable, time-stamped text.
@@ -58,21 +67,18 @@ Minimum:
 * 4 CPU cores
 * 8 GB RAM
 * 20 GB free disk space
-* 64-bit Linux
+* Dedicated VM
 
 Recommended:
 
 * 6 to 8 CPU cores
 * 12 to 16 GB RAM
-* SSD storage
-* Dedicated system or VM
+* 40 GB free disk space
+* Dedicated VM
 
 Operating systems tested:
 
 * Debian 12
-* Ubuntu 22.04 Server (minimal install)
-
-Other Linux distributions may work but are not officially tested.
 
 Software:
 
@@ -81,10 +87,9 @@ Software:
 
 Performance notes:
 
-- Transcription is CPU-intensive
+- Transcription is GPU-intensive
 - The Whisper model uses approximately 3 GB RAM when loaded
 - A 4-core system is sufficient for basic use
-- Additional CPU cores improve transcription speed significantly
 
 Memory behavior:
 
@@ -96,70 +101,64 @@ Memory behavior:
 
 ---
 
+## Experimental NVIDIA GPU Installation
+
+> **Experimental Feature**
+>
+> NVIDIA GPU acceleration is currently under active development and hardware compatibility testing. At this time, GPU installation is supported **only** through the StrixNote Proxmox Helper Script.
+
+### Current Support
+
+The GPU installation has been validated on:
+
+* NVIDIA Quadro P2000
+* Debian 12
+* CUDA acceleration enabled
+
+Additional NVIDIA GPU models will be added as they are tested.
+
+| GPU | Operating System | Status |
+|------|------------------|--------|
+| NVIDIA Quadro P2000 | Debian 12 | ✅ Fully validated |
+
+### Requirements
+
+Before using the Proxmox Helper Script for a GPU installation:
+
+* Proxmox VE host with IOMMU enabled
+* An NVIDIA GPU with CUDA support
+* The GPU must not already be assigned to another virtual machine
+
+> **Important**
+>
+> The GPU **must not** already be assigned to another virtual machine. Proxmox allows a PCI device to be attached to only one VM at a time. If the selected GPU is already attached to another VM, VM creation will fail.
+
 ### Installation
 
-## Automated Install (Proxmox)
+GPU acceleration is currently available from the experimental GPU branch.
 
-For the easiest setup, use the Proxmox helper script. This will automatically create a Debian 12 VM and install StrixNote.
-
-```bash
-bash <(curl -s https://raw.githubusercontent.com/shaneaune/strixnote-proxmox-helper/main/proxmox-create-strixnote-vm.sh)
-```
-
-Proxmox helper repository:
-https://github.com/shaneaune/strixnote-proxmox-helper
-
-
-## Manual Installation
-
-Tested on a clean Debian 12 VM and Ubuntu 22.04 VM
-
-Recommended specs:
-
-* 8 vCPU
-* 8 GB RAM minimum (12 GB recommended)
-* 40 GB disk
-
----
-
-### Ubuntu Server (minimal install)
-
-### Step 1 - Install Ubuntu
-
-Use the Server installer with a minimal/default setup.
-
-During installation:
-* Enable "OpenSSH server"
-* Do not install any additional server packages
-* Do not install a desktop environment
-
----
-
-### Step 2 - Install StrixNote
-
-You do not need to install Docker or configure permissions manually.
-The installer handles all required setup automatically.
-
-If Docker is already installed on your system, the installer will detect and reuse the existing installation.
+Run the Proxmox Helper Script:
 
 ```bash
-sudo apt update
-sudo apt install -y git
-git clone https://github.com/shaneaune/strixnote.git
-cd strixnote
-./install.sh
+bash <(curl -s https://raw.githubusercontent.com/shaneaune/strixnote-proxmox-helper/feature/gpu-acceleration/proxmox-create-strixnote-vm.sh)
 ```
 
-If you want to specify a port other than the default 8080, replace the last line with:
+The helper script will automatically download and install the experimental GPU-enabled version of StrixNote.
 
-```bash
-STRIXNOTE_WEB_PORT=9090 ./install.sh
-```
+Helper repository:
 
-This process may take several minutes on first run.
+https://github.com/shaneaune/strixnote-proxmox-helper/tree/feature/gpu-acceleration
 
-The installer will:
+### Installation Notes
 
+During a GPU installation the helper script will:
+
+* Create a new Debian 12 virtual machine
+* Configure the VM for GPU passthrough
+* Install the NVIDIA driver
+* Automatically reboot the VM when required
+* Reconnect after the reboot and resume the installation
+* Install StrixNote and configure GPU acceleration
 * install Docker and required packages
 * configure permissions automatically
 * create the configuration file (.env)
@@ -169,101 +168,9 @@ The installer will:
 * apply search schema
 * preload the transcription model
 
----
+The automatic reboot during installation is expected and requires no user intervention.
 
-### Finish - Open the interface
-
-Open in your browser:
-
-```text
-http://<server-ip>:8080
-```
-
-If you specified another port number, use that port.
-
----
-
-### Debian 12.0 (minimal install)
-
-### Step 1 - Install Debian
-
-Use a minimal install with:
-
-* SSH server
-* standard system utilities
-
-Do not install a desktop environment.
-
----
-
-### Step 2 - Install StrixNote
-
-You do not need to install Docker or configure permissions manually.
-The installer handles all required setup automatically.
-
-If Docker is already installed on your system, the installer will detect and reuse the existing installation.
-
-StrixNote runs in its own isolated containers and will not modify existing Docker workloads.
-
-On a minimal Debian 12 install, `sudo` is not available by default.
-
-Run the following as your normal user (you will be prompted for the root password):
-
-```bash
-su -c '
-apt update &&
-apt install -y sudo git &&
-/usr/sbin/usermod -aG sudo user &&
-echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/strixnote-install &&
-chmod 440 /etc/sudoers.d/strixnote-install &&
-su - user -c "
-git clone https://github.com/shaneaune/strixnote.git &&
-cd strixnote &&
-./install.sh
-"
-'
-```
-
-To use a custom port, edit the command inside the block and change:
-
-./install.sh
-
-to:
-
-```bash
-STRIXNOTE_WEB_PORT=9090 ./install.sh
-```
-
-This process may take several minutes on first run.
-
-The installer will:
-
-* install Docker and required packages
-* configure permissions automatically
-* create the configuration file (.env)
-* create data directories
-* start containers
-* wait for Meilisearch
-* apply search schema
-* preload the transcription model
-
-After installation completes, remove the temporary sudo permission:
-
-```bash
-su -c 'rm -f /etc/sudoers.d/strixnote-install'
-```
-
-### Finish - Open the interface
-
-Open in your browser:
-
-```text
-http://<server-ip>:8080
-```
-
-If you specified another port number, use that port.
-
----
+Installation time depends on your hardware and internet connection. A typical installation takes 15–30 minutes. The installer may appear to pause several times while downloading packages, installing drivers, or preloading the transcription model. This is expected.
 
 
 ### First run:
@@ -272,7 +179,7 @@ If you specified another port number, use that port.
 * Wait for processing
 * Open the transcript in Browse
 
-The model is preloaded, so there is no first-run delay.
+The model is preloaded, so there is no first-run delay. GPU accelerated processing should be about 8X faster then CPU. 
 
 ---
 
@@ -297,7 +204,8 @@ Processing:
 
 Typical speed:
 
-* About 1 minute of audio per minute of processing on a 4-core system
+* CPU: Approximately real-time on a modern 4-core processor.
+* GPU-accelerated processing is approximately 8× faster than CPU processing on the currently supported hardware.
 
 ---
 
@@ -596,6 +504,8 @@ The data directory contains uploaded audio, transcripts, settings, search data, 
 
 StrixNote is a working, self-hosted transcription system with a complete install flow and core feature set.
 
+CPU functionality is stable. This branch contains the current experimental NVIDIA GPU implementation, which is undergoing hardware compatibility testing before being merged into the main branch.
+
 The application has been tested on a clean Debian 12 environment with a reproducible install process. Core functionality including transcription, search, playback, and editing is stable.
 
 The current focus is on polish, usability, and preparing for broader use.
@@ -604,36 +514,39 @@ The current focus is on polish, usability, and preparing for broader use.
 
 ## Roadmap
 
-### Current Focus (Stabilization)
+### Current Focus
 
-* Improve UI clarity and user feedback
-* Better visibility of processing and indexing status
-* Refine install experience and documentation
-* Develop Proxmox helper script
-* Improve error handling and logging
+* Validate additional NVIDIA GPU models
+* Refine the GPU installation experience
+* Improve installation documentation
+* Continue UI polish and usability improvements
+* Improve error handling and diagnostics
 
 ---
 
 ### Short Term
 
-* Bulk actions (delete, manage multiple files)
+* Expand GPU compatibility testing
+* Bulk actions (delete and manage multiple files)
 * Transcript export improvements
+* Improve processing and indexing status visibility
 
 ---
 
 ### Mid Term
 
+* Multiple Whisper model selection (performance vs. accuracy)
 * Index health visibility in Settings
 * Reindex progress indicator for large rebuilds
 * Improved file management tools
 
 ---
 
-### Longer Term
+### Long Term
 
-* Optional GPU acceleration
-* Multiple model selection (performance vs accuracy)
-* Optional authentication layer
+* Merge the GPU branch into the main branch
+* AMD GPU support (if feasible)
+* Optional authentication
 * API access for automation and integrations
 
 ---
@@ -649,6 +562,11 @@ The current focus is on polish, usability, and preparing for broader use.
 ## Expected Behavior
 
 The following behaviors are normal during operation:
+
+### Automatic Reboot During Installation
+
+During a GPU installation, the virtual machine will automatically reboot after the NVIDIA driver is installed.
+The Proxmox Helper Script will wait for the VM to come back online and automatically resume the installation.
 
 ### High memory usage
 
